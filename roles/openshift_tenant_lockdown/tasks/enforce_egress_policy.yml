@@ -1,0 +1,6 @@
+---
+- name: "[MOCK] enforce_egress_policy"
+  ansible.builtin.debug:
+    msg: >-
+      Enforces default-deny egress with an allowlist (NetworkPolicy/EgressFirewall)
+      so tenants cannot bypass egress restrictions via Route or ExternalName.

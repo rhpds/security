@@ -1,0 +1,6 @@
+---
+- name: "[MOCK] output_security_report"
+  ansible.builtin.debug:
+    msg: >-
+      Security report — guid: {{ guid | default('unknown') }},
+      date: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}

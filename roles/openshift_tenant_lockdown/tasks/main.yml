@@ -1,0 +1,18 @@
+---
+- name: Apply Zero Touch tenant lockdown
+  when: zero_touch | default(false) | bool
+  block:
+    - name: Enforce quota policy
+      ansible.builtin.include_tasks: enforce_quota_policy.yml
+
+    - name: Enforce egress policy
+      ansible.builtin.include_tasks: enforce_egress_policy.yml
+
+    - name: Enforce ingress policy
+      ansible.builtin.include_tasks: enforce_ingress_policy.yml
+
+    - name: Enforce pod networking policy
+      ansible.builtin.include_tasks: enforce_pod_networking_policy.yml
+
+    - name: Output security report
+      ansible.builtin.include_tasks: output_security_report.yml

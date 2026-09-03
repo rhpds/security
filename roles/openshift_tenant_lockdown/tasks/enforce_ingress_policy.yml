@@ -1,0 +1,6 @@
+---
+- name: "[MOCK] enforce_ingress_policy"
+  ansible.builtin.debug:
+    msg: >-
+      Enforces default-deny ingress except from the router/intra-namespace
+      traffic, preventing unsolicited inbound access to tenant workloads.

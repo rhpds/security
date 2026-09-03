@@ -1,0 +1,6 @@
+---
+- name: "[MOCK] enforce_pod_networking_policy"
+  ansible.builtin.debug:
+    msg: >-
+      Enforces intra-namespace pod-to-pod network segmentation, restricting
+      pod networking to what the tenant's own workloads require.

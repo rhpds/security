@@ -1,0 +1,6 @@
+*.retry
+.cache/
+.agents/
+.claude/
+.pi/
+skills-lock.json

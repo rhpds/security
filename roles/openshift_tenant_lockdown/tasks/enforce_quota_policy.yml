@@ -1,0 +1,6 @@
+---
+- name: "[MOCK] enforce_quota_policy"
+  ansible.builtin.debug:
+    msg: >-
+      Enforces per-tenant resource quota isolation (AppliedClusterResourceQuota)
+      so tenants cannot see other tenants' GUIDs via ClusterResourceQuota.
