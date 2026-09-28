@@ -19,19 +19,13 @@
       There is no source of truth to validate against.
       The seat will not be released.
 
-- name: Fail when the Application has no helm values
-  when: >-
-    _cluster_security_application.resources[0].spec.source.helm.values
-    | default('') | length == 0
-  ansible.builtin.fail:
-    msg: >-
-      Application {{ ocp_workload_cluster_security_policy_application_name }}
-      has no spec.source.helm.values.
-      The seat will not be released.
-
 - name: Use the Application helm values as the desired cluster policy
   ansible.builtin.set_fact:
-    _cluster_security_desired: "{{ _cluster_security_application.resources[0].spec.source.helm.values | from_yaml }}"
+    _cluster_security_helm_values: "{{ _cluster_security_application.resources[0].spec.source.helm.values | default('', true) }}"
     _cluster_security_application_health: "{{ _cluster_security_application.resources[0].status.health.status | default('') }}"
     _cluster_security_application_sync: "{{ _cluster_security_application.resources[0].status.sync.status | default('') }}"
     _security_findings: []
+
+- name: Parse the Application helm values
+  ansible.builtin.set_fact:
+    _cluster_security_desired: "{{ {} if (_cluster_security_helm_values | length == 0) else (_cluster_security_helm_values | from_yaml) }}"

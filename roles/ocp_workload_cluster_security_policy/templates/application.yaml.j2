@@ -11,19 +11,11 @@ spec:
     repoURL: {{ ocp_workload_cluster_security_policy_repo_url }}
     targetRevision: {{ ocp_workload_cluster_security_policy_repo_revision }}
     path: {{ ocp_workload_cluster_security_policy_repo_path }}
+{% if ocp_workload_cluster_security_policy_helm_values | default({}) | length > 0 %}
     helm:
       values: |
-        adminNetworkPolicy:
-          name: {{ ocp_workload_cluster_security_policy_adminnetworkpolicy_name | quote }}
-          priority: {{ ocp_workload_cluster_security_policy_adminnetworkpolicy_priority | int }}
-        selfProvisioner:
-          enabled: {{ ocp_workload_cluster_security_policy_self_provisioner | bool | ternary('true', 'false') }}
-        extraEgressCIDRs:
-{{ ocp_workload_cluster_security_policy_extra_egress_cidrs | to_nice_yaml | indent(10, first=True) }}
-        allowNamespaces:
-{{ ocp_workload_cluster_security_policy_allow_namespaces | to_nice_yaml | indent(10, first=True) }}
-        allowedRegistries:
-{{ ocp_workload_cluster_security_policy_allowed_registries | to_nice_yaml | indent(10, first=True) }}
+{{ ocp_workload_cluster_security_policy_helm_values | to_nice_yaml | indent(8, true) }}
+{% endif %}
   ignoreDifferences:
     - group: config.openshift.io
       kind: Image

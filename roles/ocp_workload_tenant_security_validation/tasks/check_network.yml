@@ -42,7 +42,14 @@
         _anp | json_query('spec.egress[?name==`deny-to-other-tenants`].to[].namespaces.matchExpressions[?key==`openshift.io/requester` && operator==`Exists`]')
         | default([], true)
       }}
-    _cluster_priority: "{{ _cluster_security_desired.adminNetworkPolicy.priority | int }}"
+    _cluster_priority: >-
+      {{
+        (
+          _cluster_security_live_anp_priority
+          if (_cluster_security_live_anp_priority | default(-1) | int) >= 0
+          else ((_cluster_security_desired.adminNetworkPolicy | default({})).priority | default(50))
+        ) | int
+      }}
     _tenant_priority: "{{ -1 if (_anp | json_query('spec.priority')) is none else (_anp | json_query('spec.priority')) }}"
     _tenant_anp_ok: >-
       {{

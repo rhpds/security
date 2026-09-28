@@ -23,12 +23,13 @@
     validate_certs: "{{ _security_validate_certs | default(omit) }}"
     api_version: policy.networking.k8s.io/v1alpha1
     kind: AdminNetworkPolicy
-    name: "{{ _cluster_security_desired.adminNetworkPolicy.name }}"
+    name: "{{ (_cluster_security_desired.adminNetworkPolicy | default({})).name | default('tenant-egress') }}"
   register: _cluster_security_validation_anp
 
 - name: Record the cluster AdminNetworkPolicy result
   ansible.builtin.set_fact:
     _security_findings: "{{ _security_findings + [_anp_finding] }}"
+    _cluster_security_live_anp_priority: "{{ _anp_priority }}"
   vars:
     _anp: "{{ _cluster_security_validation_anp.resources | default([], true) | first | default({}, true) }}"
     _anp_missing: "{{ _anp | length == 0 }}"
@@ -50,10 +51,12 @@
         | list
       }}
     _anp_priority: "{{ -1 if (_anp | json_query('spec.priority')) is none else (_anp | json_query('spec.priority')) }}"
+    _want_priority: "{{ (_cluster_security_desired.adminNetworkPolicy | default({})).priority | default(none) }}"
+    _anp_name: "{{ (_cluster_security_desired.adminNetworkPolicy | default({})).name | default('tenant-egress') }}"
     _anp_ok: >-
       {{
         not (_anp_missing | bool)
-        and (_anp_priority | int) == (_cluster_security_desired.adminNetworkPolicy.priority | int)
+        and (_want_priority is none or (_anp_priority | int) == (_want_priority | int))
         and (_requester | length == 1)
         and ('allow-from-ingress' in _ingress_names)
         and ('allow-dns' in _egress_names)
@@ -66,14 +69,14 @@
         )
       }}
     _anp_finding:
-      check: "AdminNetworkPolicy {{ _cluster_security_desired.adminNetworkPolicy.name }}"
+      check: "AdminNetworkPolicy {{ _anp_name }}"
       ok: "{{ _anp_ok | bool }}"
       detail: >-
         {{
           'missing'
           if (_anp_missing | bool)
           else 'priority ' ~ _anp_priority
-            ~ ', expected ' ~ _cluster_security_desired.adminNetworkPolicy.priority
+            ~ ('' if _want_priority is none else ', expected ' ~ _want_priority)
         }}
 
 - name: Read image configuration
@@ -94,14 +97,20 @@
     _image_missing: "{{ _image | length == 0 }}"
     _sources: "{{ _image | json_query('spec.registrySources') | default({}, true) }}"
     _live: "{{ _sources.allowedRegistries | default([], true) | map('string') | list }}"
-    _want: "{{ _cluster_security_desired.allowedRegistries | default([], true) | map('string') | list }}"
+    _registries_set: "{{ _cluster_security_desired.allowedRegistries is defined }}"
+    _want: "{{ _cluster_security_desired.allowedRegistries | default([]) | map('string') | list }}"
     _blocked: "{{ _sources.blockedRegistries | default([], true) }}"
     _registries_ok: >-
       {{
         not (_image_missing | bool)
         and (_blocked | length == 0)
-        and (_want | difference(_live) | length == 0)
-        and (_live | difference(_want) | length == 0)
+        and (
+          not (_registries_set | bool)
+          or (
+            (_want | difference(_live) | length == 0)
+            and (_live | difference(_want) | length == 0)
+          )
+        )
       }}
     _registries_finding:
       check: allowed registries
@@ -135,7 +144,7 @@
         _binding | json_query('metadata.annotations."rbac.authorization.kubernetes.io/autoupdate"')
         | default('', true)
       }}
-    _enabled: "{{ _cluster_security_desired.selfProvisioner.enabled | bool }}"
+    _enabled: "{{ (_cluster_security_desired.selfProvisioner | default({})).enabled | default(false) | bool }}"
     _self_provisioner_ok: >-
       {{
         not (_binding_missing | bool)
@@ -161,6 +170,6 @@
           'missing'
           if (_binding_missing | bool)
           else 'selfProvisioner.enabled '
-            ~ (_cluster_security_desired.selfProvisioner.enabled | bool | lower)
+            ~ (_enabled | bool | lower)
             ~ ', autoupdate ' ~ (_autoupdate | default('missing'))
         }}

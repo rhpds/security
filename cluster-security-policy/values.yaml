@@ -31,14 +31,16 @@ selfProvisioner:
 
 # image.config.openshift.io/cluster spec.registrySources.allowedRegistries.
 # Anything not listed is blocked. Do not set blockedRegistries.
-# registry.redhat.io, quay.io, and the internal registry hostname are
-# required or platform pods fail to pull. docker.io is for lab images.
+# registry.redhat.io, registry.access.redhat.com, quay.io, and the internal
+# registry hostname are required or platform and lab pods fail to pull.
+# docker.io is for lab images.
 # An empty list does not render the object.
 # Applying this restarts CRI-O on the nodes. The Machine Config Operator
 # cordons each node while it does that.
 allowedRegistries:
   - quay.io
   - registry.redhat.io
+  - registry.access.redhat.com
   - image-registry.openshift-image-registry.svc:5000
   - docker.io
   - registry-1.docker.io
