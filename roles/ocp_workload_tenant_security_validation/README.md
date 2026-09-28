@@ -8,7 +8,7 @@ Tenant checks use what `ocp4_workload_tenant_namespace` already merged in this j
 
 - `use_cluster_quota` is true, and ClusterResourceQuota `tenant-<user>` selects `openshift.io/requester` and matches the merged quota
 - LimitRange `tenant-limit-range` exists in each tenant namespace and matches the merged LimitRange
-- AdminNetworkPolicy `tenant-isolation-<uuid>` allows that tenant's own namespaces, denies other requester namespaces, and is checked before the cluster policy
+- AdminNetworkPolicy `tenant-isolation-<uuid>` allows that tenant's own namespaces, denies other requester namespaces, and is checked before the cluster policy. A missing policy fails the provision.
 - each tenant namespace exists and is stamped with the requester and `demo.redhat.com/tenant-uuid`
 - the Showroom namespace exists when `ocp4_workload_showroom_namespace` is set
 - no other namespace is stamped for this tenant
