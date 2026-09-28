@@ -1,0 +1,37 @@
+---
+- name: Read the cluster security Application
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ ocp_workload_cluster_security_policy_application_name }}"
+    namespace: "{{ ocp_workload_cluster_security_policy_namespace }}"
+  register: _cluster_security_application
+
+- name: Fail when the cluster security Application is missing
+  when: _cluster_security_application.resources | default([]) | length == 0
+  ansible.builtin.fail:
+    msg: >-
+      Application {{ ocp_workload_cluster_security_policy_application_name }}
+      is not in namespace {{ ocp_workload_cluster_security_policy_namespace }}.
+      There is no source of truth to validate against.
+      The seat will not be released.
+
+- name: Fail when the Application has no helm values
+  when: >-
+    _cluster_security_application.resources[0].spec.source.helm.values
+    | default('') | length == 0
+  ansible.builtin.fail:
+    msg: >-
+      Application {{ ocp_workload_cluster_security_policy_application_name }}
+      has no spec.source.helm.values.
+      The seat will not be released.
+
+- name: Use the Application helm values as the desired cluster policy
+  ansible.builtin.set_fact:
+    _cluster_security_desired: "{{ _cluster_security_application.resources[0].spec.source.helm.values | from_yaml }}"
+    _cluster_security_application_health: "{{ _cluster_security_application.resources[0].status.health.status | default('') }}"
+    _cluster_security_application_sync: "{{ _cluster_security_application.resources[0].status.sync.status | default('') }}"
+    _security_findings: []

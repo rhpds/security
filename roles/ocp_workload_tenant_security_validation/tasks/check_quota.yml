@@ -1,0 +1,157 @@
+---
+- name: Record whether this tenant uses a ClusterResourceQuota
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_quota_mode_finding] }}"
+  vars:
+    _quota_mode_ok: "{{ ocp4_workload_tenant_namespace_use_cluster_quota | bool }}"
+    _quota_mode_finding:
+      check: ClusterResourceQuota required
+      ok: "{{ _quota_mode_ok | bool }}"
+      detail: >-
+        use_cluster_quota is
+        {{ ocp4_workload_tenant_namespace_use_cluster_quota | default('unset') }}
+
+- name: Read the tenant ClusterResourceQuota
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: quota.openshift.io/v1
+    kind: ClusterResourceQuota
+    name: "tenant-{{ _tenant_security_user }}"
+  register: _tenant_security_crq
+
+- name: Record the ClusterResourceQuota selector
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_crq_finding] }}"
+  vars:
+    _crq: "{{ _tenant_security_crq.resources | default([], true) | first | default({}, true) }}"
+    _crq_missing: "{{ _crq | length == 0 }}"
+    _selector: >-
+      {{
+        _crq | json_query('spec.selector.annotations."openshift.io/requester"')
+        | default('', true)
+      }}
+    _crq_ok: "{{ (not (_crq_missing | bool)) and (_selector == _tenant_security_user) }}"
+    _crq_finding:
+      check: "ClusterResourceQuota tenant-{{ _tenant_security_user }}"
+      ok: "{{ _crq_ok | bool }}"
+      detail: >-
+        {{
+          'missing'
+          if (_crq_missing | bool)
+          else 'requester ' ~ (_selector | default('missing'))
+        }}
+
+- name: Start the quota comparison
+  ansible.builtin.set_fact:
+    _quota_mismatches: []
+    _quota_crq: "{{ _tenant_security_crq.resources | default([], true) | first | default({}, true) }}"
+
+- name: Remember the live quota
+  ansible.builtin.set_fact:
+    _quota_hard: "{{ _quota_crq | json_query('spec.quota.hard') | default({}, true) }}"
+
+- name: Note expected quota keys the ClusterResourceQuota does not have
+  ansible.builtin.set_fact:
+    _quota_mismatches: "{{ _quota_mismatches + [item.key ~ ': expected ' ~ item.value ~ ', live ' ~ (_quota_hard[item.key] | default('missing'))] }}"
+  when:
+    - _quota_crq | length > 0
+    - item.key not in _quota_hard or (_quota_hard[item.key] | string) != (item.value | string)
+  loop: "{{ _tenant_security_expected_quota | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Note live quota keys the namespace role did not set
+  ansible.builtin.set_fact:
+    _quota_mismatches: "{{ _quota_mismatches + [item.key ~ ': live ' ~ item.value ~ ', not part of the merged quota'] }}"
+  when:
+    - _tenant_security_quota_is_complete | bool
+    - _quota_crq | length > 0
+    - item.key not in _tenant_security_expected_quota
+  loop: "{{ _quota_hard | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Record the quota values
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_quota_overlay_finding] }}"
+  vars:
+    _quota_overlay_ok: "{{ (_quota_crq | length > 0) and (_quota_mismatches | length == 0) }}"
+    _quota_overlay_finding:
+      check: "{{ 'merged quota' if (_tenant_security_quota_is_complete | bool) else 'catalog quota overlay' }}"
+      ok: "{{ _quota_overlay_ok | bool }}"
+      detail: >-
+        {{
+          'ClusterResourceQuota is missing'
+          if (_quota_crq | length == 0)
+          else (
+            'matches the ClusterResourceQuota'
+            if (_quota_overlay_ok | bool)
+            else (_quota_mismatches | join('; '))
+          )
+        }}
+
+- name: Read LimitRange in each tenant namespace
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: v1
+    kind: LimitRange
+    name: tenant-limit-range
+    namespace: "{{ item.name }}"
+  loop: "{{ _tenant_security_namespace_specs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _tenant_security_limit_ranges
+
+- name: Record each LimitRange
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_limit_finding] }}"
+  vars:
+    _limit: "{{ item.resources | default([], true) | first | default({}, true) }}"
+    _limit_missing: "{{ _limit | length == 0 }}"
+    _container: >-
+      {{
+        _limit | json_query('spec.limits') | default([], true)
+        | selectattr('type', 'equalto', 'Container')
+        | first
+        | default({}, true)
+      }}
+    _want_limit: "{{ item.item.limit_range | default({}) }}"
+    _limit_detail: >-
+      {% set ns = namespace(bad=[]) %}
+      {% for section in ['default', 'defaultRequest'] %}
+      {% for pair in (_want_limit[section] | default({})) | dict2items %}
+      {% set live_value = (_container[section] | default({})).get(pair.key, 'missing') %}
+      {% if (live_value | string) != (pair.value | string) %}
+      {% set ns.bad = ns.bad + [section ~ '.' ~ pair.key ~ ' expected ' ~ pair.value ~ ' live ' ~ live_value] %}
+      {% endif %}
+      {% endfor %}
+      {% if _tenant_security_quota_is_complete | bool %}
+      {% for pair in (_container[section] | default({})) | dict2items %}
+      {% if pair.key not in (_want_limit[section] | default({})) %}
+      {% set ns.bad = ns.bad + [section ~ '.' ~ pair.key ~ ' live ' ~ pair.value ~ ', not part of the merged LimitRange'] %}
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+      {{ ns.bad | join('; ') }}
+    _limit_ok: "{{ (not (_limit_missing | bool)) and (_limit_detail | trim | length == 0) }}"
+    _limit_finding:
+      check: "LimitRange {{ item.item.name }}/tenant-limit-range"
+      ok: "{{ _limit_ok | bool }}"
+      detail: >-
+        {{
+          'missing'
+          if (_limit_missing | bool)
+          else (
+            'catalog overlay matches'
+            if (_limit_detail | trim | length == 0)
+            else (_limit_detail | trim)
+          )
+        }}
+  loop: "{{ _tenant_security_limit_ranges.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"

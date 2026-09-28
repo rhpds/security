@@ -5,8 +5,9 @@ Security hardening roles for Red Hat Demo Platform (RHDP) OpenShift tenants.
 ## Roles
 
 - [`ocp_workload_cluster_security_policy`](roles/ocp_workload_cluster_security_policy/README.md) — cluster catalog item workload. Points OpenShift GitOps at [`cluster-security-policy`](cluster-security-policy).
-- [`ocp_workload_cluster_security_validation`](roles/ocp_workload_cluster_security_validation/README.md) — last cluster workload. Reads the AdminNetworkPolicy and the self-provisioner binding. Fails the provision if they are missing or were changed. Does not repair them.
-- [`openshift_tenant_lockdown`](roles/openshift_tenant_lockdown/README.md) — applies Zero Touch tenant lockdown policies (quota, egress, ingress, pod networking) to a per-tenant OpenShift namespace.
+- [`ocp_workload_cluster_security_validation`](roles/ocp_workload_cluster_security_validation/README.md) — last cluster workload. Reads Application `cluster-security-policy` and fails the provision if the live objects do not match its helm values. Does not repair them.
+- [`ocp_workload_tenant_security_validation`](roles/ocp_workload_tenant_security_validation/README.md) — last tenant workload. Checks the cluster Application and the tenant objects. Fails the provision when a check fails. Does not create anything.
+- [`openshift_tenant_lockdown`](roles/openshift_tenant_lockdown/README.md) — scaffold for Zero Touch tenant lockdown. Left unchanged. New tenant catalog items use `ocp_workload_tenant_security_validation`.
 
 ## GitOps
 

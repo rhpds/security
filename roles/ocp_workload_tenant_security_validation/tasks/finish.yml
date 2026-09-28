@@ -1,0 +1,35 @@
+---
+- name: Collect failed security checks
+  ansible.builtin.set_fact:
+    _security_failed: []
+    _security_report_lines:
+      - "Tenant security report — {{ _tenant_security_user }}"
+
+- name: Keep the checks that failed
+  ansible.builtin.set_fact:
+    _security_failed: "{{ _security_failed + [item] }}"
+  when: not (item.ok | bool)
+  loop: "{{ _security_findings }}"
+  loop_control:
+    label: "{{ item.check }}"
+
+- name: Build the tenant security report
+  ansible.builtin.set_fact:
+    _security_report_lines: "{{ _security_report_lines + [((item.ok | bool) | ternary('PASS', 'FAIL')) ~ '  ' ~ item.check ~ ' — ' ~ item.detail] }}"
+  loop: "{{ _security_findings }}"
+  loop_control:
+    label: "{{ item.check }}"
+
+- name: Publish the tenant security report
+  agnosticd.core.agnosticd_user_info:
+    msg: "{{ _security_report_lines | join('\n') }}"
+    data:
+      tenant_security_report_status: "{{ 'failed' if (_security_failed | length > 0) else 'passed' }}"
+      tenant_security_report: "{{ _security_report_lines | join('\n') }}"
+
+- name: Fail the provision when a security check failed
+  when: _security_failed | length > 0
+  ansible.builtin.fail:
+    msg: >-
+      {{ _security_failed | length }}
+      security check(s) failed. The seat will not be released.

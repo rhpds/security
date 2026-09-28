@@ -1,0 +1,71 @@
+---
+- name: Read the per-tenant AdminNetworkPolicy
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: policy.networking.k8s.io/v1alpha1
+    kind: AdminNetworkPolicy
+    name: "tenant-isolation-{{ _tenant_security_uuid | lower }}"
+  register: _tenant_security_anp
+
+- name: Record the per-tenant AdminNetworkPolicy result
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_tenant_anp_finding] }}"
+  vars:
+    _anp: "{{ _tenant_security_anp.resources | default([], true) | first | default({}, true) }}"
+    _anp_missing: "{{ _anp | length == 0 }}"
+    _ingress_actions: "{{ _anp | json_query('spec.ingress') | default([], true) | items2dict(key_name='name', value_name='action') }}"
+    _egress_actions: "{{ _anp | json_query('spec.egress') | default([], true) | items2dict(key_name='name', value_name='action') }}"
+    _subject_uuid: >-
+      {{
+        _anp | json_query('spec.subject.namespaces.matchLabels."demo.redhat.com/tenant-uuid"')
+        | default('', true)
+      }}
+    _own_in: >-
+      {{
+        _anp | json_query('spec.ingress[?name==`allow-from-own-namespaces`].from[].namespaces.matchLabels."demo.redhat.com/tenant-uuid"')
+        | default([], true)
+      }}
+    _own_out: >-
+      {{
+        _anp | json_query('spec.egress[?name==`allow-to-own-namespaces`].to[].namespaces.matchLabels."demo.redhat.com/tenant-uuid"')
+        | default([], true)
+      }}
+    _deny_in: >-
+      {{
+        _anp | json_query('spec.ingress[?name==`deny-from-other-tenants`].from[].namespaces.matchExpressions[?key==`openshift.io/requester` && operator==`Exists`]')
+        | default([], true)
+      }}
+    _deny_out: >-
+      {{
+        _anp | json_query('spec.egress[?name==`deny-to-other-tenants`].to[].namespaces.matchExpressions[?key==`openshift.io/requester` && operator==`Exists`]')
+        | default([], true)
+      }}
+    _cluster_priority: "{{ _cluster_security_desired.adminNetworkPolicy.priority | int }}"
+    _tenant_priority: "{{ -1 if (_anp | json_query('spec.priority')) is none else (_anp | json_query('spec.priority')) }}"
+    _tenant_anp_ok: >-
+      {{
+        not (_anp_missing | bool)
+        and (_tenant_priority | int) < _cluster_priority
+        and (_subject_uuid == _tenant_security_uuid)
+        and (_ingress_actions['allow-from-own-namespaces'] | default('') == 'Allow')
+        and (_ingress_actions['deny-from-other-tenants'] | default('') == 'Deny')
+        and (_egress_actions['allow-to-own-namespaces'] | default('') == 'Allow')
+        and (_egress_actions['deny-to-other-tenants'] | default('') == 'Deny')
+        and (_tenant_security_uuid in _own_in)
+        and (_tenant_security_uuid in _own_out)
+        and (_deny_in | length > 0)
+        and (_deny_out | length > 0)
+        and ('networks' not in (_anp.spec | default({}) | to_json))
+      }}
+    _tenant_anp_finding:
+      check: "AdminNetworkPolicy tenant-isolation-{{ _tenant_security_uuid | lower }}"
+      ok: "{{ _tenant_anp_ok | bool }}"
+      detail: >-
+        {{
+          'missing'
+          if (_anp_missing | bool)
+          else 'priority ' ~ _tenant_priority
+            ~ ', cluster policy priority ' ~ _cluster_priority
+        }}

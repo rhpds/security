@@ -1,0 +1,68 @@
+---
+- name: Require the tenant cluster API
+  when: >-
+    sandbox_openshift_api_url is not defined
+    or cluster_admin_agnosticd_sa_token is not defined
+  ansible.builtin.fail:
+    msg: >-
+      sandbox_openshift_api_url and cluster_admin_agnosticd_sa_token
+      are not set. The seat will not be released.
+
+- name: Set the tenant identity and the cluster API
+  ansible.builtin.set_fact:
+    _tenant_security_user: "{{ ocp4_workload_tenant_namespace_username | default('user-' ~ guid) }}"
+    _tenant_security_uuid: "{{ ocp4_workload_tenant_namespace_uuid | default(guid) }}"
+    _tenant_security_role: "{{ ocp4_workload_tenant_namespace_role | default('admin') }}"
+    _security_api_url: "{{ sandbox_openshift_api_url }}"
+    _security_api_key: "{{ cluster_admin_agnosticd_sa_token | trim }}"
+    _security_validate_certs: false
+
+- name: Build the single tenant namespace
+  when: ocp4_workload_tenant_namespace_suffixes | default([]) | length == 0
+  ansible.builtin.set_fact:
+    _tenant_security_namespace_specs:
+      - name: "{{ _tenant_security_user }}"
+        limit_range: "{{ ocp4_workload_tenant_namespace_default_limit_range | default({}) }}"
+
+- name: Build tenant namespaces from suffixes
+  when: ocp4_workload_tenant_namespace_suffixes | default([]) | length > 0
+  ansible.builtin.set_fact:
+    _tenant_security_namespace_specs: "{{ _tenant_security_namespace_specs | default([]) + [_namespace_spec] }}"
+  vars:
+    _namespace_spec:
+      name: "{{ _tenant_security_user }}-{{ item.suffix }}"
+      limit_range: "{{ (ocp4_workload_tenant_namespace_default_limit_range | default({})) | combine(item.limit_range | default({}), recursive=True) }}"
+  loop: "{{ ocp4_workload_tenant_namespace_suffixes }}"
+  loop_control:
+    label: "{{ item.suffix }}"
+
+- name: Use the quota and LimitRange already merged by the namespace role
+  when: _tenant_namespaces is defined and _tenant_namespace_quota is defined
+  ansible.builtin.set_fact:
+    _tenant_security_namespace_specs: "{{ _tenant_namespaces }}"
+    _tenant_security_expected_quota: "{{ _tenant_namespace_quota }}"
+    _tenant_security_quota_is_complete: true
+
+- name: Fall back to the catalog overlay
+  when: _tenant_security_expected_quota is not defined
+  ansible.builtin.set_fact:
+    _tenant_security_expected_quota: "{{ ocp4_workload_tenant_namespace_default_quota | default({}) }}"
+    _tenant_security_quota_is_complete: false
+
+- name: Load the desired cluster policy from the Application
+  ansible.builtin.include_tasks: load_desired.yml
+
+- name: Check the cluster against the Application
+  ansible.builtin.include_tasks: check_desired.yml
+
+- name: Check tenant quota and LimitRange
+  ansible.builtin.include_tasks: check_quota.yml
+
+- name: Check the per-tenant AdminNetworkPolicy
+  ansible.builtin.include_tasks: check_network.yml
+
+- name: Check access, Secrets, and namespaces
+  ansible.builtin.include_tasks: check_access.yml
+
+- name: Publish the tenant security report
+  ansible.builtin.include_tasks: finish.yml

@@ -1,0 +1,7 @@
+---
+# Where to read the cluster policy. Same variables as
+# ocp_workload_cluster_security_validation. The Application's helm
+# values are what the checks compare against. Do not copy registries,
+# namespace allows, or priorities into this role.
+ocp_workload_cluster_security_policy_application_name: cluster-security-policy
+ocp_workload_cluster_security_policy_namespace: openshift-gitops

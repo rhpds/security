@@ -10,7 +10,8 @@ ocp_workload_cluster_security_policy_application_name: cluster-security-policy
 ocp_workload_cluster_security_policy_namespace: openshift-gitops
 ocp_workload_cluster_security_policy_project: default
 
-# Names the chart renders. Cluster security validation reads these at the end.
+# Rendered into the Application helm values. Validation reads the
+# Application. Do not copy these values into a validation role.
 ocp_workload_cluster_security_policy_adminnetworkpolicy_name: tenant-egress
 
 # A higher number is checked later. 50 runs after the per-tenant policy

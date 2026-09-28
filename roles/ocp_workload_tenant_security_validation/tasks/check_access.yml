@@ -1,0 +1,247 @@
+---
+- name: List namespaces
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: v1
+    kind: Namespace
+  register: _tenant_security_namespaces
+
+- name: Remember the namespaces this tenant is allowed to have
+  ansible.builtin.set_fact:
+    _tenant_security_expected_names: "{{ _tenant_security_namespace_specs | map(attribute='name') | list }}"
+
+- name: Include the Showroom namespace when this catalog item deploys it
+  when: ocp4_workload_showroom_namespace | default('') | length > 0
+  ansible.builtin.set_fact:
+    _tenant_security_expected_names: "{{ _tenant_security_expected_names + [ocp4_workload_showroom_namespace] }}"
+
+- name: Start the unexpected namespace list
+  ansible.builtin.set_fact:
+    _tenant_security_unexpected: []
+
+- name: Note namespaces stamped for this tenant that are not on the expected list
+  ansible.builtin.set_fact:
+    _tenant_security_unexpected: "{{ _tenant_security_unexpected + [item.metadata.name] }}"
+  vars:
+    _annotations: "{{ item.metadata.annotations | default({}) }}"
+    _labels: "{{ item.metadata.labels | default({}) }}"
+    _stamped: >-
+      {{
+        (_annotations['openshift.io/requester'] | default('')) == _tenant_security_user
+        or (_labels['demo.redhat.com/tenant-uuid'] | default('')) == _tenant_security_uuid
+      }}
+  when:
+    - _stamped | bool
+    - item.metadata.name not in _tenant_security_expected_names
+  loop: "{{ _tenant_security_namespaces.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+
+- name: Record unexpected namespaces
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_unexpected_finding] }}"
+  vars:
+    _unexpected_ok: "{{ _tenant_security_unexpected | length == 0 }}"
+    _unexpected_finding:
+      check: unexpected namespaces
+      ok: "{{ _unexpected_ok | bool }}"
+      detail: >-
+        {{
+          'none'
+          if (_unexpected_ok | bool)
+          else (_tenant_security_unexpected | join(', '))
+        }}
+
+- name: Record each tenant namespace identity
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_namespace_finding] }}"
+  vars:
+    _found: "{{ _tenant_security_namespaces.resources | selectattr('metadata.name', 'equalto', item.name) | list }}"
+    _namespace: "{{ _found | first | default({}, true) }}"
+    _namespace_missing: "{{ _found | length == 0 }}"
+    _requester: "{{ _namespace | json_query('metadata.annotations.\"openshift.io/requester\"') | default('', true) }}"
+    _uuid_label: "{{ _namespace | json_query('metadata.labels.\"demo.redhat.com/tenant-uuid\"') | default('', true) }}"
+    _namespace_ok: >-
+      {{
+        not (_namespace_missing | bool)
+        and (_requester == _tenant_security_user)
+        and (_uuid_label == _tenant_security_uuid)
+      }}
+    _namespace_finding:
+      check: "Namespace {{ item.name }}"
+      ok: "{{ _namespace_ok | bool }}"
+      detail: >-
+        {{
+          'missing'
+          if (_namespace_missing | bool)
+          else 'requester ' ~ (_requester | default('missing'))
+            ~ ', tenant-uuid ' ~ (_uuid_label | default('missing'))
+        }}
+  loop: "{{ _tenant_security_namespace_specs }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Record the Showroom namespace
+  when: ocp4_workload_showroom_namespace | default('') | length > 0
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_showroom_finding] }}"
+  vars:
+    _found: >-
+      {{
+        _tenant_security_namespaces.resources
+        | selectattr('metadata.name', 'equalto', ocp4_workload_showroom_namespace)
+        | list
+      }}
+    _showroom_ok: "{{ _found | length == 1 }}"
+    _showroom_finding:
+      check: "Namespace {{ ocp4_workload_showroom_namespace }}"
+      ok: "{{ _showroom_ok | bool }}"
+      detail: "{{ 'present' if (_showroom_ok | bool) else 'missing' }}"
+
+- name: Read the tenant RoleBinding in each namespace
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    name: "{{ _tenant_security_role }}-{{ _tenant_security_user }}"
+    namespace: "{{ item.name }}"
+  loop: "{{ _tenant_security_namespace_specs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _tenant_security_rolebindings
+
+- name: Record each tenant RoleBinding
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_binding_finding] }}"
+  vars:
+    _binding: "{{ item.resources | default([], true) | first | default({}, true) }}"
+    _binding_missing: "{{ _binding | length == 0 }}"
+    _role_name: "{{ _binding | json_query('roleRef.name') | default('', true) }}"
+    _subjects: "{{ _binding | json_query('subjects[?kind==`User`].name') | default([], true) }}"
+    _binding_ok: >-
+      {{
+        not (_binding_missing | bool)
+        and (_role_name == _tenant_security_role)
+        and (_tenant_security_user in _subjects)
+      }}
+    _binding_finding:
+      check: "RoleBinding {{ item.item.name }}/{{ _tenant_security_role }}-{{ _tenant_security_user }}"
+      ok: "{{ _binding_ok | bool }}"
+      detail: >-
+        {{
+          'missing'
+          if (_binding_missing | bool)
+          else 'role ' ~ _role_name
+        }}
+  loop: "{{ _tenant_security_rolebindings.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: List ClusterRoleBindings
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+  register: _tenant_security_clusterrolebindings
+
+- name: Start the cluster-admin binding list
+  ansible.builtin.set_fact:
+    _tenant_security_admin_bindings: []
+
+- name: Note cluster-admin bindings for this user
+  ansible.builtin.set_fact:
+    _tenant_security_admin_bindings: "{{ _tenant_security_admin_bindings + [item.metadata.name] }}"
+  vars:
+    _admin_users: "{{ item | json_query('subjects[?kind==`User` && name==`' ~ _tenant_security_user ~ '`].name') | default([], true) }}"
+  when:
+    - (item | json_query('roleRef.name') | default('', true)) == 'cluster-admin'
+    - _admin_users | length > 0
+  loop: "{{ _tenant_security_clusterrolebindings.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+
+- name: Record cluster-admin bindings
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_admin_finding] }}"
+  vars:
+    _admin_ok: "{{ _tenant_security_admin_bindings | length == 0 }}"
+    _admin_finding:
+      check: "cluster-admin for {{ _tenant_security_user }}"
+      ok: "{{ _admin_ok | bool }}"
+      detail: >-
+        {{
+          'no ClusterRoleBinding'
+          if (_admin_ok | bool)
+          else (_tenant_security_admin_bindings | join(', '))
+        }}
+
+- name: Read Secrets in the tenant namespaces
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: v1
+    kind: Secret
+    namespace: "{{ item }}"
+  loop: "{{ _tenant_security_expected_names }}"
+  loop_control:
+    label: "{{ item }}"
+  register: _tenant_security_secrets
+
+- name: Start the cluster-admin token search
+  ansible.builtin.set_fact:
+    _tenant_security_token_hits: []
+    _tenant_security_token_unreadable: false
+    _tenant_security_token: "{{ cluster_admin_agnosticd_sa_token | default('') | trim }}"
+
+- name: Note Secrets that contain the cluster-admin token
+  block:
+    - name: Compare tenant Secret data to the cluster-admin token
+      ansible.builtin.set_fact:
+        _tenant_security_token_hits: "{{ _tenant_security_token_hits + [item.metadata.namespace ~ '/' ~ item.metadata.name] }}"
+      no_log: true
+      when:
+        - _tenant_security_token | length > 0
+        - item.data is defined
+        - _tenant_security_token in (item.data.values() | map('b64decode') | join(''))
+      loop: "{{ _tenant_security_secrets.results | map(attribute='resources') | flatten }}"
+      loop_control:
+        label: "{{ item.metadata.namespace }}/{{ item.metadata.name }}"
+  rescue:
+    - name: Record that a tenant Secret could not be read
+      ansible.builtin.set_fact:
+        _tenant_security_token_unreadable: true
+
+- name: Record the cluster-admin token search
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_token_finding] }}"
+  vars:
+    _token_ok: >-
+      {{
+        (_tenant_security_token | length > 0)
+        and (_tenant_security_token_hits | length == 0)
+        and not (_tenant_security_token_unreadable | bool)
+      }}
+    _token_finding:
+      check: cluster-admin token in tenant Secrets
+      ok: "{{ _token_ok | bool }}"
+      detail: >-
+        {{
+          'a Secret could not be read'
+          if (_tenant_security_token_unreadable | bool)
+          else (
+            'token was not available to compare'
+            if (_tenant_security_token | length == 0)
+            else (
+              'not present'
+              if (_tenant_security_token_hits | length == 0)
+              else (_tenant_security_token_hits | join(', '))
+            )
+          )
+        }}
