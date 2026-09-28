@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: "{{ ocp_workload_cluster_security_policy_application_name }}"
+  namespace: {{ ocp_workload_cluster_security_policy_namespace }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: "{{ ocp_workload_cluster_security_policy_project }}"
+  source:
+    repoURL: {{ ocp_workload_cluster_security_policy_repo_url }}
+    targetRevision: {{ ocp_workload_cluster_security_policy_repo_revision }}
+    path: {{ ocp_workload_cluster_security_policy_repo_path }}
+    helm:
+      values: |
+        adminNetworkPolicy:
+          name: {{ ocp_workload_cluster_security_policy_adminnetworkpolicy_name | quote }}
+          priority: {{ ocp_workload_cluster_security_policy_adminnetworkpolicy_priority | int }}
+        selfProvisioner:
+          enabled: {{ ocp_workload_cluster_security_policy_self_provisioner | bool | ternary('true', 'false') }}
+        extraEgressCIDRs:
+{{ ocp_workload_cluster_security_policy_extra_egress_cidrs | to_nice_yaml | indent(10, first=True) }}
+  destination:
+    namespace: {{ ocp_workload_cluster_security_policy_namespace }}
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true

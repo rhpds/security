@@ -1,0 +1,6 @@
+---
+# Same names the policy chart applies. Catalog values override both roles.
+ocp_workload_cluster_security_policy_adminnetworkpolicy_name: tenant-egress
+ocp_workload_cluster_security_policy_adminnetworkpolicy_priority: 50
+ocp_workload_cluster_security_policy_self_provisioner: false
+ocp_workload_cluster_security_policy_extra_egress_cidrs: []

@@ -1,0 +1,8 @@
+---
+- name: Remove cluster security policy Application
+  kubernetes.core.k8s:
+    state: absent
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ ocp_workload_cluster_security_policy_application_name }}"
+    namespace: "{{ ocp_workload_cluster_security_policy_namespace }}"

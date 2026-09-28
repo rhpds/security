@@ -1,0 +1,26 @@
+---
+# Git repo and path of the cluster-security-policy chart.
+# The URL changes only if the team renames the repo.
+ocp_workload_cluster_security_policy_repo_url: https://github.com/rhpds/security.git
+ocp_workload_cluster_security_policy_repo_revision: main
+ocp_workload_cluster_security_policy_repo_path: cluster-security-policy
+
+# Not bootstrap-infra. That name is the content GitOps Application.
+ocp_workload_cluster_security_policy_application_name: cluster-security-policy
+ocp_workload_cluster_security_policy_namespace: openshift-gitops
+ocp_workload_cluster_security_policy_project: default
+
+# Names the chart renders. Cluster security validation reads these at the end.
+ocp_workload_cluster_security_policy_adminnetworkpolicy_name: tenant-egress
+ocp_workload_cluster_security_policy_adminnetworkpolicy_priority: 50
+
+# false: users cannot oc new-project. true: the chart leaves the
+# self-provisioner groups on the binding. One value for the whole cluster.
+ocp_workload_cluster_security_policy_self_provisioner: false
+
+# Cluster-wide CIDRs allowed before the deny. Empty keeps the chart sketch.
+ocp_workload_cluster_security_policy_extra_egress_cidrs: []
+
+# Provision fails when the Application is not Healthy and Synced.
+# 60 retries * 10 seconds.
+ocp_workload_cluster_security_policy_health_retries: 60

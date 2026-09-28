@@ -1,0 +1,78 @@
+---
+- name: Read the cluster AdminNetworkPolicy
+  kubernetes.core.k8s_info:
+    api_version: policy.networking.k8s.io/v1alpha1
+    kind: AdminNetworkPolicy
+    name: "{{ ocp_workload_cluster_security_policy_adminnetworkpolicy_name }}"
+  register: _cluster_security_validation_anp
+
+- name: Fail when the cluster AdminNetworkPolicy is missing
+  when: _cluster_security_validation_anp.resources | default([]) | length == 0
+  ansible.builtin.fail:
+    msg: >-
+      AdminNetworkPolicy {{ ocp_workload_cluster_security_policy_adminnetworkpolicy_name }}
+      is not in the cluster. A workload after the security policy removed it.
+      The cluster will not be released.
+
+- name: Confirm the cluster AdminNetworkPolicy matches the chart
+  vars:
+    _anp: "{{ _cluster_security_validation_anp.resources[0] }}"
+    _egress: "{{ _anp.spec.egress | default([]) }}"
+    _egress_names: "{{ _egress | map(attribute='name') | list }}"
+    _ingress_names: "{{ _anp.spec.ingress | default([]) | map(attribute='name') | list }}"
+    _deny_action: "{{ _egress | selectattr('name', 'equalto', 'deny-outside') | map(attribute='action') | list }}"
+    _requester: >-
+      {{
+        _anp.spec.subject.namespaces.matchExpressions | default([])
+        | selectattr('key', 'equalto', 'openshift.io/requester')
+        | selectattr('operator', 'equalto', 'Exists')
+        | list
+      }}
+  ansible.builtin.assert:
+    that:
+      - (_anp.spec.priority | int) == (ocp_workload_cluster_security_policy_adminnetworkpolicy_priority | int)
+      - _requester | length == 1
+      - "'allow-from-ingress' in _ingress_names"
+      - "'allow-dns' in _egress_names"
+      - "'allow-api' in _egress_names"
+      - _deny_action == ['Deny']
+      - >-
+        ocp_workload_cluster_security_policy_extra_egress_cidrs | length == 0
+        or 'allow-extra-cidrs' in _egress_names
+    fail_msg: >-
+      AdminNetworkPolicy {{ ocp_workload_cluster_security_policy_adminnetworkpolicy_name }}
+      does not match the chart. A workload after the security policy changed it.
+      The cluster will not be released.
+
+- name: Read the self-provisioner ClusterRoleBinding
+  kubernetes.core.k8s_info:
+    api_version: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    name: self-provisioner
+  register: _cluster_security_validation_self_provisioner
+
+- name: Fail when the self-provisioner binding is missing
+  when: _cluster_security_validation_self_provisioner.resources | default([]) | length == 0
+  ansible.builtin.fail:
+    msg: >-
+      ClusterRoleBinding self-provisioner is not in the cluster.
+      The cluster will not be released.
+
+- name: Confirm self-provisioner matches the chart
+  vars:
+    _binding: "{{ _cluster_security_validation_self_provisioner.resources[0] }}"
+    _groups: "{{ _binding.subjects | default([]) | map(attribute='name') | list }}"
+    _autoupdate: "{{ _binding.metadata.annotations['rbac.authorization.kubernetes.io/autoupdate'] | default('') }}"
+    _enabled: "{{ ocp_workload_cluster_security_policy_self_provisioner | bool }}"
+  ansible.builtin.assert:
+    that:
+      - _autoupdate == 'false'
+      - not (_enabled | bool) or ('system:authenticated' in _groups and 'system:authenticated:oauth' in _groups)
+      - >-
+        (_enabled | bool)
+        or ('system:authenticated' not in _groups and 'system:authenticated:oauth' not in _groups)
+    fail_msg: >-
+      ClusterRoleBinding self-provisioner does not match
+      selfProvisioner.enabled={{ ocp_workload_cluster_security_policy_self_provisioner }}.
+      A workload after the security policy changed it.
+      The cluster will not be released.

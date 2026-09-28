@@ -1,0 +1,6 @@
+---
+- name: Leave the cluster security policy in place
+  ansible.builtin.debug:
+    msg: >-
+      ocp_workload_cluster_security_validation does not remove objects.
+      ocp_workload_cluster_security_policy removes the Application on destroy.

@@ -1,0 +1,35 @@
+---
+- name: Check that OpenShift GitOps is installed
+  kubernetes.core.k8s_info:
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: applications.argoproj.io
+  register: _cluster_security_policy_argo_crd
+
+- name: Fail when OpenShift GitOps is missing
+  when: _cluster_security_policy_argo_crd.resources | default([]) | length == 0
+  ansible.builtin.fail:
+    msg: >-
+      OpenShift GitOps is not installed.
+      Run ocp4_workload_openshift_gitops before
+      ocp_workload_cluster_security_policy.
+      This role does not install it.
+
+- name: Create cluster security policy Application
+  kubernetes.core.k8s:
+    state: present
+    template: application.yaml.j2
+
+- name: Wait until cluster security policy Application is Healthy and Synced
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: "{{ ocp_workload_cluster_security_policy_application_name }}"
+    namespace: "{{ ocp_workload_cluster_security_policy_namespace }}"
+  register: _cluster_security_policy_app
+  retries: "{{ ocp_workload_cluster_security_policy_health_retries }}"
+  delay: 10
+  until:
+    - _cluster_security_policy_app.resources | default([]) | length > 0
+    - _cluster_security_policy_app.resources[0].status.health.status | default('') == 'Healthy'
+    - _cluster_security_policy_app.resources[0].status.sync.status | default('') == 'Synced'

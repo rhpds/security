@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: ocp_workload_cluster_security_policy
+  author: Red Hat
+  description: |
+    Point OpenShift GitOps at cluster-security-policy.
+    Cluster catalog item only. Does not install GitOps and does not
+    lock down a tenant.
+  license: GPL-2.0-or-later
+  min_ansible_version: "2.14"
+  platforms: []
+  galaxy_tags:
+    - ocp
+    - openshift
+dependencies: []

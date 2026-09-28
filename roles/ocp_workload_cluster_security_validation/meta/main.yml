@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: ocp_workload_cluster_security_validation
+  author: Red Hat
+  description: |
+    Last workload on a cluster catalog item. Fails the provision if the
+    cluster AdminNetworkPolicy or the self-provisioner binding is missing
+    or no longer matches the chart. Does not create or repair them.
+  license: GPL-2.0-or-later
+  min_ansible_version: "2.14"
+  platforms: []
+  galaxy_tags:
+    - ocp
+    - openshift
+dependencies: []
