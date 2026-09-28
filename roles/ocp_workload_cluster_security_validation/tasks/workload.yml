@@ -1,9 +1,0 @@
----
-- name: Load the desired cluster policy from the Application
-  ansible.builtin.include_tasks: load_desired.yml
-
-- name: Check the cluster against the Application
-  ansible.builtin.include_tasks: check_desired.yml
-
-- name: Publish the security report
-  ansible.builtin.include_tasks: finish.yml

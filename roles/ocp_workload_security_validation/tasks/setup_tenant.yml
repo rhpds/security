@@ -48,21 +48,3 @@
   ansible.builtin.set_fact:
     _tenant_security_expected_quota: "{{ ocp4_workload_tenant_namespace_default_quota | default({}) }}"
     _tenant_security_quota_is_complete: false
-
-- name: Load the desired cluster policy from the Application
-  ansible.builtin.include_tasks: load_desired.yml
-
-- name: Check the cluster against the Application
-  ansible.builtin.include_tasks: check_desired.yml
-
-- name: Check tenant quota and LimitRange
-  ansible.builtin.include_tasks: check_quota.yml
-
-- name: Check the per-tenant AdminNetworkPolicy
-  ansible.builtin.include_tasks: check_network.yml
-
-- name: Check access, Secrets, and namespaces
-  ansible.builtin.include_tasks: check_access.yml
-
-- name: Publish the tenant security report
-  ansible.builtin.include_tasks: finish.yml

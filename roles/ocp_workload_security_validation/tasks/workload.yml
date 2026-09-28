@@ -1,0 +1,25 @@
+---
+- name: Set up tenant validation context
+  when: ocp_workload_security_validation_mode == 'tenant'
+  ansible.builtin.include_tasks: setup_tenant.yml
+
+- name: Load the desired cluster policy from the Application
+  ansible.builtin.include_tasks: load_desired.yml
+
+- name: Check the cluster against the Application
+  ansible.builtin.include_tasks: check_desired.yml
+
+- name: Check tenant quota and LimitRange
+  when: ocp_workload_security_validation_mode == 'tenant'
+  ansible.builtin.include_tasks: check_quota.yml
+
+- name: Check the per-tenant AdminNetworkPolicy
+  when: ocp_workload_security_validation_mode == 'tenant'
+  ansible.builtin.include_tasks: check_network.yml
+
+- name: Check access, Secrets, and namespaces
+  when: ocp_workload_security_validation_mode == 'tenant'
+  ansible.builtin.include_tasks: check_access.yml
+
+- name: Publish the security report
+  ansible.builtin.include_tasks: finish.yml

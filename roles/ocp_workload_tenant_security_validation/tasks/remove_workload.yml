@@ -1,7 +1,0 @@
----
-- name: Leave tenant objects in place
-  ansible.builtin.debug:
-    msg: >-
-      ocp_workload_tenant_security_validation does not remove objects.
-      ocp4_workload_tenant_namespace removes the tenant namespaces,
-      the ClusterResourceQuota, and the per-tenant AdminNetworkPolicy.

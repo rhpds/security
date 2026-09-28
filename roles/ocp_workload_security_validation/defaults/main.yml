@@ -1,4 +1,8 @@
 ---
+# cluster: validates the cluster security Application and its managed objects.
+# tenant:  validates cluster policy plus tenant quota, network isolation, and access.
+ocp_workload_security_validation_mode: cluster
+
 # Where to read the source of truth. The Application's helm values are
 # what the checks compare against. Do not copy registries, namespace
 # allows, or priorities into this role. Those live on the Application,

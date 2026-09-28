@@ -1,0 +1,11 @@
+---
+- name: This role does not remove objects
+  ansible.builtin.debug:
+    msg: >-
+      ocp_workload_security_validation does not remove objects.
+      {{
+        'ocp4_workload_tenant_namespace removes the tenant namespaces,
+        the ClusterResourceQuota, and the per-tenant AdminNetworkPolicy.'
+        if ocp_workload_security_validation_mode == 'tenant'
+        else 'ocp_workload_cluster_security_policy removes the Application on destroy.'
+      }}

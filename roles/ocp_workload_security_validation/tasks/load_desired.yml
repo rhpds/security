@@ -21,7 +21,7 @@
 
 - name: Use the Application helm values as the desired cluster policy
   ansible.builtin.set_fact:
-    _cluster_security_helm_values: "{{ _cluster_security_application.resources[0].spec.source.helm.values | default('', true) }}"
+    _cluster_security_helm_values: "{{ _cluster_security_application.resources[0].spec.source.helm['values'] | default('', true) }}"
     _cluster_security_application_health: "{{ _cluster_security_application.resources[0].status.health.status | default('') }}"
     _cluster_security_application_sync: "{{ _cluster_security_application.resources[0].status.sync.status | default('') }}"
     _security_findings: []
