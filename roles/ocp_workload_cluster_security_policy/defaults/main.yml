@@ -38,6 +38,7 @@ ocp_workload_cluster_security_policy_allow_namespaces:
 ocp_workload_cluster_security_policy_allowed_registries:
   - quay.io
   - registry.redhat.io
+  - registry.access.redhat.com
   - image-registry.openshift-image-registry.svc:5000
   - docker.io
   - registry-1.docker.io
