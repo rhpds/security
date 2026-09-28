@@ -4,12 +4,20 @@ adminNetworkPolicy:
   name: tenant-egress
   priority: 50
 
-# CIDRs allowed out of those namespaces, inserted before the deny of 0.0.0.0/0 and ::/0.
-# Empty renders the design sketch: DNS, the API, ingress, then deny.
-# AdminNetworkPolicy takes CIDRs, not hostnames. A lab that pulls images from
-# outside the cluster puts those registry CIDRs here. Per-tenant external CIDRs
-# belong on the tenant namespace role, not on this chart.
+# CIDRs allowed out of user namespaces, inserted before the deny of 0.0.0.0/0 and ::/0.
+# Empty renders DNS, the API, ingress, then deny.
+# AdminNetworkPolicy takes CIDRs, not hostnames. A lab that must reach an
+# address outside the cluster, including an external registry, puts those
+# CIDRs here. This is cluster-wide. The per-tenant policy does not carry it.
 extraEgressCIDRs: []
+
+# Platform namespaces user workloads may open connections to.
+# Checked before the deny. The internal registry is included so image
+# pull and push work. Add openshift-logging or the monitoring namespace
+# here when a lab needs the pods to call those services.
+# This is not a CIDR list. extraEgressCIDRs is only for addresses outside the cluster.
+allowNamespaces:
+  - openshift-image-registry
 
 # OpenShift grants project creation by putting system:authenticated:oauth on
 # ClusterRoleBinding self-provisioner. That is what lets a user run oc new-project.
@@ -20,3 +28,17 @@ extraEgressCIDRs: []
 # way, so changing the value and syncing is what flips a live cluster.
 selfProvisioner:
   enabled: false
+
+# image.config.openshift.io/cluster spec.registrySources.allowedRegistries.
+# Anything not listed is blocked. Do not set blockedRegistries.
+# registry.redhat.io, quay.io, and the internal registry hostname are
+# required or platform pods fail to pull. docker.io is for lab images.
+# An empty list does not render the object.
+# Applying this restarts CRI-O on the nodes. The Machine Config Operator
+# cordons each node while it does that.
+allowedRegistries:
+  - quay.io
+  - registry.redhat.io
+  - image-registry.openshift-image-registry.svc:5000
+  - docker.io
+  - registry-1.docker.io

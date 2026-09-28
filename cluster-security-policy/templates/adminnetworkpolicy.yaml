@@ -42,6 +42,14 @@ spec:
         - portNumber:
             protocol: TCP
             port: 6443
+    {{- range .Values.allowNamespaces }}
+    - name: allow-to-{{ . }}
+      action: Allow
+      to:
+        - namespaces:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+    {{- end }}
     {{- if .Values.extraEgressCIDRs }}
     - name: allow-extra-cidrs
       action: Allow

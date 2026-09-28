@@ -12,14 +12,35 @@ ocp_workload_cluster_security_policy_project: default
 
 # Names the chart renders. Cluster security validation reads these at the end.
 ocp_workload_cluster_security_policy_adminnetworkpolicy_name: tenant-egress
+
+# A higher number is checked later. 50 runs after the per-tenant policy
+# at 30. 30 decides same-tenant and cross-tenant traffic. What 30 does
+# not match falls through to this policy.
 ocp_workload_cluster_security_policy_adminnetworkpolicy_priority: 50
 
 # false: users cannot oc new-project. true: the chart leaves the
 # self-provisioner groups on the binding. One value for the whole cluster.
 ocp_workload_cluster_security_policy_self_provisioner: false
 
-# Cluster-wide CIDRs allowed before the deny. Empty keeps the chart sketch.
+# Cluster-wide CIDRs allowed before the deny. Addresses outside the cluster.
 ocp_workload_cluster_security_policy_extra_egress_cidrs: []
+
+# Platform namespaces user workloads may connect to. The internal registry
+# is the default. Add a monitoring or logging namespace when a lab needs it.
+ocp_workload_cluster_security_policy_allow_namespaces:
+  - openshift-image-registry
+
+# Registries the nodes may pull and push. Anything else is blocked.
+# Includes the registries OpenShift payload images need, quay.io, and
+# Docker Hub. registry-1.docker.io is where docker.io pulls are fetched.
+# A catalog item replaces this list. Do not drop registry.redhat.io,
+# quay.io, or the internal registry hostname.
+ocp_workload_cluster_security_policy_allowed_registries:
+  - quay.io
+  - registry.redhat.io
+  - image-registry.openshift-image-registry.svc:5000
+  - docker.io
+  - registry-1.docker.io
 
 # Provision fails when the Application is not Healthy and Synced.
 # 60 retries * 10 seconds.

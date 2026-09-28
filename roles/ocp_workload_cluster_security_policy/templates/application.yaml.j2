@@ -20,6 +20,16 @@ spec:
           enabled: {{ ocp_workload_cluster_security_policy_self_provisioner | bool | ternary('true', 'false') }}
         extraEgressCIDRs:
 {{ ocp_workload_cluster_security_policy_extra_egress_cidrs | to_nice_yaml | indent(10, first=True) }}
+        allowNamespaces:
+{{ ocp_workload_cluster_security_policy_allow_namespaces | to_nice_yaml | indent(10, first=True) }}
+        allowedRegistries:
+{{ ocp_workload_cluster_security_policy_allowed_registries | to_nice_yaml | indent(10, first=True) }}
+  ignoreDifferences:
+    - group: config.openshift.io
+      kind: Image
+      jsonPointers:
+        - /status
+        - /metadata/annotations
   destination:
     namespace: {{ ocp_workload_cluster_security_policy_namespace }}
     server: https://kubernetes.default.svc

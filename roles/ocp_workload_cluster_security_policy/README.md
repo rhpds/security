@@ -19,7 +19,9 @@ On provision it creates one Argo CD Application, `cluster-security-policy`, poin
 | `ocp_workload_cluster_security_policy_adminnetworkpolicy_name` | `tenant-egress` | AdminNetworkPolicy name |
 | `ocp_workload_cluster_security_policy_adminnetworkpolicy_priority` | `50` | AdminNetworkPolicy priority |
 | `ocp_workload_cluster_security_policy_self_provisioner` | `false` | `false` removes the self-provisioner groups. `true` puts them back |
-| `ocp_workload_cluster_security_policy_extra_egress_cidrs` | `[]` | Cluster-wide CIDRs allowed before the deny |
+| `ocp_workload_cluster_security_policy_extra_egress_cidrs` | `[]` | CIDRs outside the cluster, allowed before the deny |
+| `ocp_workload_cluster_security_policy_allow_namespaces` | `openshift-image-registry` | Platform namespaces user workloads may connect to |
+| `ocp_workload_cluster_security_policy_allowed_registries` | `quay.io`, `registry.redhat.io`, the internal registry, `docker.io`, `registry-1.docker.io` | Registries the nodes may pull. Anything else is blocked |
 | `ocp_workload_cluster_security_policy_health_retries` | `60` | How many 10-second waits for Healthy and Synced |
 
 ## Catalog item

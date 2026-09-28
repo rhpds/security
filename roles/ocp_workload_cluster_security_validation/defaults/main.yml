@@ -1,6 +1,37 @@
 ---
-# Same names the policy chart applies. Catalog values override both roles.
+# This role does not create these objects. It reads them at the end of
+# provision and fails if they are missing or no longer match.
+# A catalog item sets the same names on ocp_workload_cluster_security_policy.
+# That value overrides both roles.
+
+# AdminNetworkPolicy this check looks up. The cluster chart creates it.
 ocp_workload_cluster_security_policy_adminnetworkpolicy_name: tenant-egress
+
+# Expected priority on that object. A higher number is checked later.
+# 50 runs after the per-tenant policy at 30. 30 decides same-tenant and
+# cross-tenant traffic. What 30 does not match falls through to 50.
 ocp_workload_cluster_security_policy_adminnetworkpolicy_priority: 50
+
+# false: system:authenticated and system:authenticated:oauth must be absent
+# from ClusterRoleBinding self-provisioner, and autoupdate must be false.
+# true: both groups must be present. Must match the policy role.
 ocp_workload_cluster_security_policy_self_provisioner: false
+
+# CIDRs outside the cluster that must appear as an Allow before the deny.
+# Empty means that rule is absent. Must match the policy role.
 ocp_workload_cluster_security_policy_extra_egress_cidrs: []
+
+# Platform namespaces that must have an Allow named allow-to-<namespace>.
+# The internal registry is the default. Must match the policy role.
+ocp_workload_cluster_security_policy_allow_namespaces:
+  - openshift-image-registry
+
+# Registries that must be the allowedRegistries list on
+# image.config.openshift.io/cluster. Anything else on the object fails
+# the check. Must match the policy role. blockedRegistries must be empty.
+ocp_workload_cluster_security_policy_allowed_registries:
+  - quay.io
+  - registry.redhat.io
+  - image-registry.openshift-image-registry.svc:5000
+  - docker.io
+  - registry-1.docker.io

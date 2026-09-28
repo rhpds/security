@@ -35,6 +35,11 @@
       - "'allow-from-ingress' in _ingress_names"
       - "'allow-dns' in _egress_names"
       - "'allow-api' in _egress_names"
+      - >-
+        ocp_workload_cluster_security_policy_allow_namespaces
+        | map('regex_replace', '^', 'allow-to-')
+        | difference(_egress_names)
+        | length == 0
       - _deny_action == ['Deny']
       - >-
         ocp_workload_cluster_security_policy_extra_egress_cidrs | length == 0
@@ -42,6 +47,34 @@
     fail_msg: >-
       AdminNetworkPolicy {{ ocp_workload_cluster_security_policy_adminnetworkpolicy_name }}
       does not match the chart. A workload after the security policy changed it.
+      The cluster will not be released.
+
+- name: Read image configuration
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Image
+    name: cluster
+  register: _cluster_security_validation_image
+
+- name: Fail when image configuration is missing
+  when: _cluster_security_validation_image.resources | default([]) | length == 0
+  ansible.builtin.fail:
+    msg: >-
+      image.config.openshift.io/cluster is missing.
+      The cluster will not be released.
+
+- name: Confirm allowed registries match the chart
+  vars:
+    _sources: "{{ _cluster_security_validation_image.resources[0].spec.registrySources | default({}) }}"
+    _live: "{{ _sources.allowedRegistries | default([]) }}"
+    _want: "{{ ocp_workload_cluster_security_policy_allowed_registries }}"
+  ansible.builtin.assert:
+    that:
+      - _sources.blockedRegistries | default([]) | length == 0
+      - _want | difference(_live) | length == 0
+      - _live | difference(_want) | length == 0
+    fail_msg: >-
+      Allowed registries are {{ _live }}. Expected {{ _want }}.
       The cluster will not be released.
 
 - name: Read the self-provisioner ClusterRoleBinding
