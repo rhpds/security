@@ -2,6 +2,8 @@
 - name: Collect failed security checks
   ansible.builtin.set_fact:
     _security_failed: []
+    _security_report_data: {}
+    _security_report_lines: []
 
 - name: Keep the checks that failed
   ansible.builtin.set_fact:
@@ -11,16 +13,24 @@
   loop_control:
     label: "{{ item.check }}"
 
-- name: Build per-finding data keys
+- name: Build per-finding data keys and report lines
   ansible.builtin.set_fact:
     _security_report_data: >-
       {{
-        _security_report_data | default({})
+        _security_report_data
         | combine({
-            ocp_workload_security_validation_mode ~ '_security_finding_' ~ idx:
-              ((item.ok | bool) | ternary('PASS', 'FAIL')) ~ '  ' ~ item.check ~ ' — ' ~ item.detail
+            _prefix ~ '_check':  item.check,
+            _prefix ~ '_status': (item.ok | bool) | ternary('PASS', 'FAIL'),
+            _prefix ~ '_detail': item.detail
           })
       }}
+    _security_report_lines: >-
+      {{
+        _security_report_lines
+        + [((item.ok | bool) | ternary('PASS', 'FAIL')) ~ '  ' ~ item.check ~ ' — ' ~ item.detail]
+      }}
+  vars:
+    _prefix: "{{ ocp_workload_security_validation_mode ~ '_security_finding_' ~ idx }}"
   loop: "{{ _security_findings }}"
   loop_control:
     label: "{{ item.check }}"
@@ -28,16 +38,7 @@
 
 - name: Publish the security report
   agnosticd.core.agnosticd_user_info:
-    msg: >-
-      {{
-        (
-          'Tenant security report — ' ~ _tenant_security_user
-          if ocp_workload_security_validation_mode == 'tenant'
-          else 'Cluster security report'
-        )
-        ~ '\n'
-        ~ _security_report_data.values() | list | join('\n')
-      }}
+    msg: "{{ _security_report_lines | join('\n') }}"
     data: >-
       {{
         {
