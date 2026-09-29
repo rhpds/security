@@ -43,10 +43,13 @@
         | map('regex_replace', '^', 'allow-to-')
         | list
       }}
+    _want_subject_label: >-
+      {{ (_cluster_security_desired.adminNetworkPolicy | default({})).subjectLabel
+         | default('demo.redhat.com/tenant-uuid') }}
     _requester: >-
       {{
         _anp | json_query('spec.subject.namespaces.matchExpressions') | default([], true)
-        | selectattr('key', 'equalto', 'openshift.io/requester')
+        | selectattr('key', 'equalto', _want_subject_label)
         | selectattr('operator', 'equalto', 'Exists')
         | list
       }}
@@ -129,7 +132,7 @@
     validate_certs: "{{ _security_validate_certs | default(omit) }}"
     api_version: rbac.authorization.k8s.io/v1
     kind: ClusterRoleBinding
-    name: self-provisioner
+    name: self-provisioners
   register: _cluster_security_validation_self_provisioner
 
 - name: Record the self-provisioner result
@@ -163,7 +166,7 @@
         )
       }}
     _self_provisioner_finding:
-      check: ClusterRoleBinding self-provisioner
+      check: ClusterRoleBinding self-provisioners
       ok: "{{ _self_provisioner_ok | bool }}"
       detail: >-
         {{
