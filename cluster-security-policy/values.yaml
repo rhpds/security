@@ -1,8 +1,11 @@
-# Cluster AdminNetworkPolicy. Subject is every namespace with openshift.io/requester.
+# Cluster AdminNetworkPolicy.
+# subjectLabel: the namespace label whose presence selects which namespaces
+# this ANP applies to. Must be a label, not an annotation.
 # An empty subject also selects openshift-*, which the product docs warn against.
 adminNetworkPolicy:
   name: tenant-egress
   priority: 50
+  subjectLabel: demo.redhat.com/tenant-uuid
 
 # CIDRs allowed out of user namespaces, inserted before the deny of 0.0.0.0/0 and ::/0.
 # Empty renders DNS, the API, ingress, then deny.
@@ -19,13 +22,11 @@ extraEgressCIDRs: []
 allowNamespaces:
   - openshift-image-registry
 
-# OpenShift grants project creation by putting system:authenticated:oauth on
-# ClusterRoleBinding self-provisioner. That is what lets a user run oc new-project.
-# false: drop system:authenticated and system:authenticated:oauth, and set
-# rbac.authorization.kubernetes.io/autoupdate=false so the cluster policy
-# controller does not put the groups back. GitOps self-heal keeps it that way.
-# true: put both groups on the binding. The binding stays in this chart either
-# way, so changing the value and syncing is what flips a live cluster.
+# OpenShift grants project creation via ClusterRoleBinding self-provisioners
+# (plural). false: empty the subjects and set autoupdate=false so the cluster
+# policy controller does not restore the groups. GitOps self-heal keeps it.
+# true: put both groups on the binding. The binding stays in this chart
+# either way, so changing the value and syncing is what flips a live cluster.
 selfProvisioner:
   enabled: false
 

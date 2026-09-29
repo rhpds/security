@@ -7,7 +7,7 @@ spec:
   subject:
     namespaces:
       matchExpressions:
-        - key: openshift.io/requester
+        - key: {{ .Values.adminNetworkPolicy.subjectLabel }}
           operator: Exists
   ingress:
     - name: allow-from-ingress
