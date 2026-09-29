@@ -2,13 +2,6 @@
 - name: Collect failed security checks
   ansible.builtin.set_fact:
     _security_failed: []
-    _security_report_lines:
-      - >-
-        {{
-          'Tenant security report — ' ~ _tenant_security_user
-          if ocp_workload_security_validation_mode == 'tenant'
-          else 'Cluster security report'
-        }}
 
 - name: Keep the checks that failed
   ansible.builtin.set_fact:
@@ -18,24 +11,40 @@
   loop_control:
     label: "{{ item.check }}"
 
-- name: Build the security report
+- name: Build per-finding data keys
   ansible.builtin.set_fact:
-    _security_report_lines: "{{ _security_report_lines + [((item.ok | bool) | ternary('PASS', 'FAIL')) ~ '  ' ~ item.check ~ ' — ' ~ item.detail] }}"
+    _security_report_data: >-
+      {{
+        _security_report_data | default({})
+        | combine({
+            ocp_workload_security_validation_mode ~ '_security_finding_' ~ idx:
+              ((item.ok | bool) | ternary('PASS', 'FAIL')) ~ '  ' ~ item.check ~ ' — ' ~ item.detail
+          })
+      }}
   loop: "{{ _security_findings }}"
   loop_control:
     label: "{{ item.check }}"
+    index_var: idx
 
 - name: Publish the security report
   agnosticd.core.agnosticd_user_info:
-    msg: "{{ _security_report_lines | join('\n') }}"
+    msg: >-
+      {{
+        (
+          'Tenant security report — ' ~ _tenant_security_user
+          if ocp_workload_security_validation_mode == 'tenant'
+          else 'Cluster security report'
+        )
+        ~ '\n'
+        ~ _security_report_data.values() | list | join('\n')
+      }}
     data: >-
       {{
         {
           ocp_workload_security_validation_mode ~ '_security_report_status':
-            'failed' if (_security_failed | length > 0) else 'passed',
-          ocp_workload_security_validation_mode ~ '_security_report':
-            _security_report_lines | join('\n')
+            'failed' if (_security_failed | length > 0) else 'passed'
         }
+        | combine(_security_report_data)
       }}
 
 - name: Fail the provision when a security check failed
