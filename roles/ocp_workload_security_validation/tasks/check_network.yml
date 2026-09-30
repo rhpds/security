@@ -34,12 +34,12 @@
       }}
     _deny_in: >-
       {{
-        _anp | json_query('spec.ingress[?name==`deny-from-other-tenants`].from[].namespaces.matchExpressions[?key==`openshift.io/requester` && operator==`Exists`]')
+        _anp | json_query('spec.ingress[?name==`deny-from-other-tenants`].from[].namespaces.matchExpressions[?key==`demo.redhat.com/tenant-uuid` && operator==`Exists`]')
         | default([], true)
       }}
     _deny_out: >-
       {{
-        _anp | json_query('spec.egress[?name==`deny-to-other-tenants`].to[].namespaces.matchExpressions[?key==`openshift.io/requester` && operator==`Exists`]')
+        _anp | json_query('spec.egress[?name==`deny-to-other-tenants`].to[].namespaces.matchExpressions[?key==`demo.redhat.com/tenant-uuid` && operator==`Exists`]')
         | default([], true)
       }}
     _cluster_priority: >-
@@ -67,12 +67,12 @@
         and ('networks' not in (_anp.spec | default({}) | to_json))
       }}
     _tenant_anp_finding:
-      check: "AdminNetworkPolicy tenant-isolation-{{ _tenant_security_uuid | lower }}"
+      check: Tenant network isolation
       ok: "{{ _tenant_anp_ok | bool }}"
       detail: >-
         {{
           'missing'
           if (_anp_missing | bool)
-          else 'priority ' ~ _tenant_priority
-            ~ ', cluster policy priority ' ~ _cluster_priority
+          else 'tenant-isolation-' ~ (_tenant_security_uuid | lower)
+            ~ ', priority ' ~ _tenant_priority ~ ' (before cluster at ' ~ _cluster_priority ~ ')'
         }}

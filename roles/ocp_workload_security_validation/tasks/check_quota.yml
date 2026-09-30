@@ -5,11 +5,9 @@
   vars:
     _quota_mode_ok: "{{ ocp4_workload_tenant_namespace_use_cluster_quota | bool }}"
     _quota_mode_finding:
-      check: ClusterResourceQuota required
+      check: Cluster resource quota mode
       ok: "{{ _quota_mode_ok | bool }}"
-      detail: >-
-        use_cluster_quota is
-        {{ ocp4_workload_tenant_namespace_use_cluster_quota | default('unset') }}
+      detail: "{{ 'shared pool (ClusterResourceQuota)' if (_quota_mode_ok | bool) else 'per-namespace quota' }}"
 
 - name: Read the tenant ClusterResourceQuota
   kubernetes.core.k8s_info:
@@ -34,7 +32,7 @@
       }}
     _crq_ok: "{{ (not (_crq_missing | bool)) and (_selector == _tenant_security_user) }}"
     _crq_finding:
-      check: "ClusterResourceQuota tenant-{{ _tenant_security_user }}"
+      check: "Resource quota for {{ _tenant_security_user }}"
       ok: "{{ _crq_ok | bool }}"
       detail: >-
         {{
@@ -79,14 +77,14 @@
   vars:
     _quota_overlay_ok: "{{ (_quota_crq | length > 0) and (_quota_mismatches | length == 0) }}"
     _quota_overlay_finding:
-      check: "{{ 'merged quota' if (_tenant_security_quota_is_complete | bool) else 'catalog quota overlay' }}"
+      check: Quota limits
       ok: "{{ _quota_overlay_ok | bool }}"
       detail: >-
         {{
-          'ClusterResourceQuota is missing'
+          'quota not found'
           if (_quota_crq | length == 0)
           else (
-            'matches the ClusterResourceQuota'
+            'all limits match'
             if (_quota_overlay_ok | bool)
             else (_quota_mismatches | join('; '))
           )
@@ -140,14 +138,14 @@
       {{ ns.bad | join('; ') }}
     _limit_ok: "{{ (not (_limit_missing | bool)) and (_limit_detail | trim | length == 0) }}"
     _limit_finding:
-      check: "LimitRange {{ item.item.name }}/tenant-limit-range"
+      check: "Container defaults for {{ item.item.name }}"
       ok: "{{ _limit_ok | bool }}"
       detail: >-
         {{
           'missing'
           if (_limit_missing | bool)
           else (
-            'catalog overlay matches'
+            'all defaults match'
             if (_limit_detail | trim | length == 0)
             else (_limit_detail | trim)
           )

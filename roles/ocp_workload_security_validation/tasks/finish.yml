@@ -20,14 +20,13 @@
         _security_report_data
         | combine({
             _prefix ~ '_check':  item.check,
-            _prefix ~ '_status': (item.ok | bool) | ternary('PASS', 'FAIL'),
             _prefix ~ '_detail': item.detail
           })
       }}
     _security_report_lines: >-
       {{
         _security_report_lines
-        + [((item.ok | bool) | ternary('PASS', 'FAIL')) ~ '  ' ~ item.check ~ ' — ' ~ item.detail]
+        + [item.check ~ ' — ' ~ item.detail]
       }}
   vars:
     _prefix: "{{ ocp_workload_security_validation_mode ~ '_security_finding_' ~ idx }}"
@@ -39,14 +38,7 @@
 - name: Publish the security report
   agnosticd.core.agnosticd_user_info:
     msg: "{{ _security_report_lines | join('\n') }}"
-    data: >-
-      {{
-        {
-          ocp_workload_security_validation_mode ~ '_security_report_status':
-            'failed' if (_security_failed | length > 0) else 'passed'
-        }
-        | combine(_security_report_data)
-      }}
+    data: "{{ _security_report_data }}"
 
 - name: Fail the provision when a security check failed
   when: _security_failed | length > 0

@@ -45,14 +45,9 @@
   vars:
     _unexpected_ok: "{{ _tenant_security_unexpected | length == 0 }}"
     _unexpected_finding:
-      check: unexpected namespaces
+      check: Extra namespaces for this tenant
       ok: "{{ _unexpected_ok | bool }}"
-      detail: >-
-        {{
-          'none'
-          if (_unexpected_ok | bool)
-          else (_tenant_security_unexpected | join(', '))
-        }}
+      detail: "{{ 'none found' if (_unexpected_ok | bool) else (_tenant_security_unexpected | join(', ')) }}"
 
 - name: Record each tenant namespace identity
   ansible.builtin.set_fact:
@@ -129,7 +124,7 @@
         and (_tenant_security_user in _subjects)
       }}
     _binding_finding:
-      check: "RoleBinding {{ item.item.name }}/{{ _tenant_security_role }}-{{ _tenant_security_user }}"
+      check: "{{ _tenant_security_user }} access in {{ item.item.name }}"
       ok: "{{ _binding_ok | bool }}"
       detail: >-
         {{
@@ -172,14 +167,9 @@
   vars:
     _admin_ok: "{{ _tenant_security_admin_bindings | length == 0 }}"
     _admin_finding:
-      check: "cluster-admin for {{ _tenant_security_user }}"
+      check: "Cluster-admin escalation for {{ _tenant_security_user }}"
       ok: "{{ _admin_ok | bool }}"
-      detail: >-
-        {{
-          'no ClusterRoleBinding'
-          if (_admin_ok | bool)
-          else (_tenant_security_admin_bindings | join(', '))
-        }}
+      detail: "{{ 'none' if (_admin_ok | bool) else (_tenant_security_admin_bindings | join(', ')) }}"
 
 - name: Read Secrets in the tenant namespaces
   kubernetes.core.k8s_info:
@@ -229,17 +219,17 @@
         and not (_tenant_security_token_unreadable | bool)
       }}
     _token_finding:
-      check: cluster-admin token in tenant Secrets
+      check: Admin token leaked to tenant
       ok: "{{ _token_ok | bool }}"
       detail: >-
         {{
-          'a Secret could not be read'
+          'could not read a Secret'
           if (_tenant_security_token_unreadable | bool)
           else (
-            'token was not available to compare'
+            'token not available to compare'
             if (_tenant_security_token | length == 0)
             else (
-              'not present'
+              'not found'
               if (_tenant_security_token_hits | length == 0)
               else (_tenant_security_token_hits | join(', '))
             )

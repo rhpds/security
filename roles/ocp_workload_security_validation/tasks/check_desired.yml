@@ -9,12 +9,11 @@
         and _cluster_security_application_sync == 'Synced'
       }}
     _application_finding:
-      check: >-
-        Application {{ ocp_workload_cluster_security_policy_application_name }}
+      check: Cluster security policy (ArgoCD)
       ok: "{{ _application_ok | bool }}"
       detail: >-
-        health {{ _cluster_security_application_health | default('missing') }},
-        sync {{ _cluster_security_application_sync | default('missing') }}
+        {{ _cluster_security_application_health | default('missing') }},
+        {{ _cluster_security_application_sync | default('missing') }}
 
 - name: Read the cluster AdminNetworkPolicy named by the Application
   kubernetes.core.k8s_info:
@@ -72,14 +71,13 @@
         )
       }}
     _anp_finding:
-      check: "AdminNetworkPolicy {{ _anp_name }}"
+      check: Cluster egress policy
       ok: "{{ _anp_ok | bool }}"
       detail: >-
         {{
-          'missing'
+          'missing — AdminNetworkPolicy ' ~ _anp_name ~ ' not found'
           if (_anp_missing | bool)
-          else 'priority ' ~ _anp_priority
-            ~ ('' if _want_priority is none else ', expected ' ~ _want_priority)
+          else _anp_name ~ ', priority ' ~ _anp_priority
         }}
 
 - name: Read image configuration
@@ -116,14 +114,9 @@
         )
       }}
     _registries_finding:
-      check: allowed registries
+      check: Allowed container registries
       ok: "{{ _registries_ok | bool }}"
-      detail: >-
-        {{
-          'image.config.openshift.io/cluster is missing'
-          if (_image_missing | bool)
-          else 'live ' ~ (_live | join(', '))
-        }}
+      detail: "{{ _live | join(', ') if not (_image_missing | bool) else 'image config missing' }}"
 
 - name: Read the self-provisioners ClusterRoleBinding
   kubernetes.core.k8s_info:
@@ -166,13 +159,12 @@
         )
       }}
     _self_provisioner_finding:
-      check: ClusterRoleBinding self-provisioners
+      check: Self-provisioner (oc new-project)
       ok: "{{ _self_provisioner_ok | bool }}"
       detail: >-
         {{
-          'missing'
+          'binding missing'
           if (_binding_missing | bool)
-          else 'selfProvisioner.enabled '
-            ~ (_enabled | bool | lower)
+          else ('disabled' if not (_enabled | bool) else 'enabled')
             ~ ', autoupdate ' ~ (_autoupdate | default('missing'))
         }}
