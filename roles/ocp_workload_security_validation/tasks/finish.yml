@@ -38,7 +38,14 @@
 - name: Publish the security report
   agnosticd.core.agnosticd_user_info:
     msg: "{{ _security_report_lines | join('\n') }}"
-    data: "{{ _security_report_data }}"
+    data: >-
+      {{
+        {
+          ocp_workload_security_validation_mode ~ '_security_report_status':
+            'failed' if (_security_failed | length > 0) else 'passed'
+        }
+        | combine(_security_report_data)
+      }}
 
 - name: Fail the provision when a security check failed
   when: _security_failed | length > 0
