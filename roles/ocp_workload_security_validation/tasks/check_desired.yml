@@ -70,6 +70,19 @@
           or ('allow-extra-cidrs' in _egress_names)
         )
       }}
+    _anp_issues: >-
+      {{
+        []
+        + (['wrong priority ' ~ _anp_priority]
+           if (_want_priority is not none and (_anp_priority | int) != (_want_priority | int)) else [])
+        + (['subject label mismatch'] if (_requester | length != 1) else [])
+        + (['missing allow-dns'] if 'allow-dns' not in _egress_names else [])
+        + (['missing allow-api'] if 'allow-api' not in _egress_names else [])
+        + (['missing allow-extra-cidrs']
+           if (_cluster_security_desired.extraEgressCIDRs | default([], true) | length > 0
+               and 'allow-extra-cidrs' not in _egress_names) else [])
+        + (['deny-outside not Deny'] if (_deny_action != ['Deny']) else [])
+      }}
     _anp_finding:
       check: Cluster egress policy
       ok: "{{ _anp_ok | bool }}"
@@ -77,7 +90,10 @@
         {{
           'missing — AdminNetworkPolicy ' ~ _anp_name ~ ' not found'
           if (_anp_missing | bool)
-          else _anp_name ~ ', priority ' ~ _anp_priority
+          else (
+            _anp_name ~ ', priority ' ~ _anp_priority
+            ~ ('' if (_anp_ok | bool) else ' — ' ~ (_anp_issues | join(', ')))
+          )
         }}
 
 - name: Read image configuration
@@ -113,10 +129,25 @@
           )
         )
       }}
+    _missing_registries: "{{ _want | difference(_live) }}"
+    _extra_registries: "{{ _live | difference(_want) }}"
     _registries_finding:
       check: Allowed container registries
       ok: "{{ _registries_ok | bool }}"
-      detail: "{{ _live | join(', ') if not (_image_missing | bool) else 'image config missing' }}"
+      detail: >-
+        {{
+          'image config missing'
+          if (_image_missing | bool)
+          else (
+            (_live | length | string) ~ ' allowed, all match'
+            if (_registries_ok | bool)
+            else (
+              (('missing: ' ~ (_missing_registries | join(', '))) if (_missing_registries | length > 0) else '')
+              ~ ((' | ' if (_missing_registries | length > 0 and _extra_registries | length > 0) else '')
+              ~ (('unexpected: ' ~ (_extra_registries | join(', '))) if (_extra_registries | length > 0) else ''))
+            )
+          )
+        }}
 
 - name: Read the self-provisioners ClusterRoleBinding
   kubernetes.core.k8s_info:
@@ -158,6 +189,13 @@
           )
         )
       }}
+    _sp_issues: >-
+      {{
+        []
+        + (['autoupdate not false'] if (_autoupdate != 'false') else [])
+        + (['groups still present'] if (not (_enabled | bool) and _groups | length > 0) else [])
+        + (['groups missing'] if ((_enabled | bool) and ('system:authenticated' not in _groups or 'system:authenticated:oauth' not in _groups)) else [])
+      }}
     _self_provisioner_finding:
       check: Self-provisioner (oc new-project)
       ok: "{{ _self_provisioner_ok | bool }}"
@@ -165,6 +203,9 @@
         {{
           'binding missing'
           if (_binding_missing | bool)
-          else ('disabled' if not (_enabled | bool) else 'enabled')
+          else (
+            ('disabled' if not (_enabled | bool) else 'enabled')
             ~ ', autoupdate ' ~ (_autoupdate | default('missing'))
+            ~ ('' if (_self_provisioner_ok | bool) else ' — ' ~ (_sp_issues | join(', ')))
+          )
         }}

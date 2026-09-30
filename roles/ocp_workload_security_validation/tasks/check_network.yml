@@ -66,6 +66,18 @@
         and (_deny_out | length > 0)
         and ('networks' not in (_anp.spec | default({}) | to_json))
       }}
+    _tenant_anp_issues: >-
+      {{
+        []
+        + (['priority ' ~ _tenant_priority ~ ' not before cluster ' ~ _cluster_priority]
+           if ((_tenant_priority | int) >= (_cluster_priority | int)) else [])
+        + (['subject uuid mismatch'] if (_subject_uuid != _tenant_security_uuid) else [])
+        + (['missing allow-from-own-namespaces'] if (_ingress_actions['allow-from-own-namespaces'] | default('') != 'Allow') else [])
+        + (['missing deny-from-other-tenants'] if (_ingress_actions['deny-from-other-tenants'] | default('') != 'Deny') else [])
+        + (['missing allow-to-own-namespaces'] if (_egress_actions['allow-to-own-namespaces'] | default('') != 'Allow') else [])
+        + (['missing deny-to-other-tenants'] if (_egress_actions['deny-to-other-tenants'] | default('') != 'Deny') else [])
+        + (['contains network CIDRs'] if ('networks' in (_anp.spec | default({}) | to_json)) else [])
+      }}
     _tenant_anp_finding:
       check: Tenant network isolation
       ok: "{{ _tenant_anp_ok | bool }}"
@@ -73,6 +85,9 @@
         {{
           'missing'
           if (_anp_missing | bool)
-          else 'tenant-isolation-' ~ (_tenant_security_uuid | lower)
+          else (
+            'tenant-isolation-' ~ (_tenant_security_uuid | lower)
             ~ ', priority ' ~ _tenant_priority ~ ' (before cluster at ' ~ _cluster_priority ~ ')'
+            ~ ('' if (_tenant_anp_ok | bool) else ' — ' ~ (_tenant_anp_issues | join(', ')))
+          )
         }}
