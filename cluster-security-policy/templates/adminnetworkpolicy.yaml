@@ -47,6 +47,17 @@ spec:
         - portNumber:
             protocol: TCP
             port: 6443
+    - name: allow-ingress-routes
+      action: Allow
+      to:
+        - nodes:
+            matchExpressions:
+              - key: kubernetes.io/os
+                operator: Exists
+      ports:
+        - portNumber:
+            protocol: TCP
+            port: 443
     {{- range .Values.allowNamespaces }}
     - name: allow-to-{{ . }}
       action: Allow
