@@ -58,6 +58,26 @@ spec:
         - portNumber:
             protocol: TCP
             port: 443
+    - name: allow-image-registry
+      action: Allow
+      to:
+        - namespaces:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-image-registry
+      ports:
+        - portNumber:
+            protocol: TCP
+            port: 5000
+    - name: allow-kubernetes-api-svc
+      action: Allow
+      to:
+        - namespaces:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - portNumber:
+            protocol: TCP
+            port: 443
     {{- range .Values.allowNamespaces }}
     - name: allow-to-{{ . }}
       action: Allow

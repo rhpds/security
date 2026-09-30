@@ -64,6 +64,8 @@
         and ('allow-dns' in _egress_names)
         and ('allow-api' in _egress_names)
         and ('allow-ingress-routes' in _egress_names)
+        and ('allow-image-registry' in _egress_names)
+        and ('allow-kubernetes-api-svc' in _egress_names)
         and (_want_allows | difference(_egress_names) | length == 0)
         and (_deny_action == ['Deny'])
         and (
@@ -80,6 +82,8 @@
         + (['missing allow-dns'] if 'allow-dns' not in _egress_names else [])
         + (['missing allow-api'] if 'allow-api' not in _egress_names else [])
         + (['missing allow-ingress-routes'] if 'allow-ingress-routes' not in _egress_names else [])
+        + (['missing allow-image-registry'] if 'allow-image-registry' not in _egress_names else [])
+        + (['missing allow-kubernetes-api-svc'] if 'allow-kubernetes-api-svc' not in _egress_names else [])
         + (['missing allow-extra-cidrs']
            if (_cluster_security_desired.extraEgressCIDRs | default([], true) | length > 0
                and 'allow-extra-cidrs' not in _egress_names) else [])

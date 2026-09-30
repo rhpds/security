@@ -14,14 +14,13 @@ adminNetworkPolicy:
 # CIDRs here. This is cluster-wide. The per-tenant policy does not carry it.
 extraEgressCIDRs: []
 
-# Platform namespaces user workloads may open connections to.
-# Checked before the deny. The internal registry is included so image
-# pull and push work. Add openshift-logging or the monitoring namespace
-# here when a lab needs the pods to call those services.
-# This is not a CIDR list. extraEgressCIDRs is only for addresses outside the cluster.
-allowNamespaces:
-  - openshift-image-registry
-  - default
+# Additional platform namespaces user workloads may open connections to.
+# Each entry generates an allow rule with no port restriction. The image
+# registry (port 5000) and kubernetes.default.svc (port 443) have their
+# own dedicated rules and do not need to be listed here.
+# Use this for namespaces a specific lab needs, such as openshift-logging
+# or a shared services namespace.
+allowNamespaces: []
 
 # OpenShift grants project creation via ClusterRoleBinding self-provisioners
 # (plural). false: empty the subjects and set autoupdate=false so the cluster
