@@ -15,14 +15,24 @@
       ocp_workload_cluster_security_policy.
       This role does not install it.
 
-- name: Include API load balancer in egress CIDRs
+- name: Read the cluster ingress domain
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Ingress
+    name: cluster
+  register: _cluster_security_policy_ingress
+
+- name: Include API and ingress load balancers in egress CIDRs
   ansible.builtin.set_fact:
     ocp_workload_cluster_security_policy_helm_values: >-
       {{ ocp_workload_cluster_security_policy_helm_values
          | combine({'extraEgressCIDRs':
            (ocp_workload_cluster_security_policy_helm_values.extraEgressCIDRs | default([]))
            + [lookup('community.general.dig', openshift_api_url | urlsplit('hostname')) ~ '/32']
+           + [lookup('community.general.dig', 'oauth-openshift.' ~ _ingress_domain) ~ '/32']
          }) }}
+  vars:
+    _ingress_domain: "{{ _cluster_security_policy_ingress.resources[0].spec.domain }}"
 
 - name: Create cluster security policy Application
   kubernetes.core.k8s:

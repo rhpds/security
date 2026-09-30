@@ -8,7 +8,7 @@ adminNetworkPolicy:
   subjectLabel: demo.redhat.com/tenant-uuid
 
 # CIDRs allowed out of user namespaces, inserted before the deny of 0.0.0.0/0 and ::/0.
-# Empty renders DNS, the API, ingress, then deny.
+# Empty renders DNS, the API, then deny.
 # AdminNetworkPolicy takes CIDRs, not hostnames. A lab that must reach an
 # address outside the cluster, including an external registry, puts those
 # CIDRs here. This is cluster-wide. The per-tenant policy does not carry it.
