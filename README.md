@@ -11,4 +11,4 @@ Security hardening roles for Red Hat Demo Platform (RHDP) OpenShift tenants.
 
 ## GitOps
 
-- [`cluster-security-policy`](cluster-security-policy) — cluster AdminNetworkPolicy and the self-provisioner switch. Application `cluster-security-policy` points here. This is not the content bootstrap Application named `bootstrap-infra`.
+- [`cluster-security-policy`](cluster-security-policy) — cluster AdminNetworkPolicy and the self-provisioners switch. Application `cluster-security-policy` points here. This is not the content bootstrap Application named `bootstrap-infra`.

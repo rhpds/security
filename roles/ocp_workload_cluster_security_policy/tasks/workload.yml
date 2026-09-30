@@ -15,6 +15,24 @@
       ocp_workload_cluster_security_policy.
       This role does not install it.
 
+- name: Resolve API load balancer address
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - "import socket; print(socket.gethostbyname('{{ openshift_api_url | urlsplit('hostname') }}'))"
+  register: _api_lb_resolve
+  changed_when: false
+
+- name: Include API load balancer in egress CIDRs
+  ansible.builtin.set_fact:
+    ocp_workload_cluster_security_policy_helm_values: >-
+      {{ ocp_workload_cluster_security_policy_helm_values
+         | combine({'extraEgressCIDRs':
+           (ocp_workload_cluster_security_policy_helm_values.extraEgressCIDRs | default([]))
+           + [_api_lb_resolve.stdout | trim ~ '/32']
+         }) }}
+
 - name: Create cluster security policy Application
   kubernetes.core.k8s:
     state: present

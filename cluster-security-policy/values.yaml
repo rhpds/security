@@ -21,6 +21,7 @@ extraEgressCIDRs: []
 # This is not a CIDR list. extraEgressCIDRs is only for addresses outside the cluster.
 allowNamespaces:
   - openshift-image-registry
+  - default
 
 # OpenShift grants project creation via ClusterRoleBinding self-provisioners
 # (plural). false: empty the subjects and set autoupdate=false so the cluster

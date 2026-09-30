@@ -20,16 +20,21 @@ spec:
     - name: allow-dns
       action: Allow
       to:
-        - pods:
-            namespaceSelector:
-              matchLabels:
-                kubernetes.io/metadata.name: openshift-dns
-            podSelector:
-              matchLabels:
-                app: dns
+        - namespaces:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
       ports:
         - portNumber:
             protocol: UDP
+            port: 53
+        - portNumber:
+            protocol: TCP
+            port: 53
+        - portNumber:
+            protocol: UDP
+            port: 5353
+        - portNumber:
+            protocol: TCP
             port: 5353
     - name: allow-api
       action: Allow

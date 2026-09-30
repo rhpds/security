@@ -1,5 +1,5 @@
 apiVersion: v2
 name: cluster-security-policy
-description: Cluster AdminNetworkPolicy and self-provisioner control for an RHDP tenant host
+description: Cluster AdminNetworkPolicy and self-provisioners control for an RHDP tenant host
 type: application
 version: 0.1.0

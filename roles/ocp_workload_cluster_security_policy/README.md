@@ -2,9 +2,9 @@
 
 Cluster catalog item workload. It does not install OpenShift GitOps, and it does not lock down a tenant. `openshift_tenant_lockdown` is the tenant check.
 
-On provision it creates one Argo CD Application, `cluster-security-policy`, pointed at `cluster-security-policy` in this repo. That name is not `bootstrap-infra`. Content GitOps bootstrap keeps that name for its own Application, in another repository. `selfHeal` is true and `prune` is false. This role finishes when that Application is Healthy and Synced. It does not read the AdminNetworkPolicy or the `self-provisioner` binding. `ocp_workload_cluster_security_validation` does that, last.
+On provision it creates one Argo CD Application, `cluster-security-policy`, pointed at `cluster-security-policy` in this repo. That name is not `bootstrap-infra`. Content GitOps bootstrap keeps that name for its own Application, in another repository. `selfHeal` is true and `prune` is false. This role finishes when that Application is Healthy and Synced. It does not read the AdminNetworkPolicy or the `self-provisioners` binding. `ocp_workload_cluster_security_validation` does that, last.
 
-`ocp4_workload_openshift_gitops` has to be earlier in the same workload list. The GitOps controller has to be allowed to create an AdminNetworkPolicy and to update ClusterRoleBinding `self-provisioner`. `ocp4_workload_openshift_gitops_setup_cluster_admin: true` does that.
+`ocp4_workload_openshift_gitops` has to be earlier in the same workload list. The GitOps controller has to be allowed to create an AdminNetworkPolicy and to update ClusterRoleBinding `self-provisioners`. `ocp4_workload_openshift_gitops_setup_cluster_admin: true` does that.
 
 ## Role variables
 

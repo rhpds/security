@@ -125,7 +125,7 @@
           else 'live ' ~ (_live | join(', '))
         }}
 
-- name: Read the self-provisioner ClusterRoleBinding
+- name: Read the self-provisioners ClusterRoleBinding
   kubernetes.core.k8s_info:
     host: "{{ _security_api_url | default(omit) }}"
     api_key: "{{ _security_api_key | default(omit) }}"
@@ -135,7 +135,7 @@
     name: self-provisioners
   register: _cluster_security_validation_self_provisioner
 
-- name: Record the self-provisioner result
+- name: Record the self-provisioners result
   ansible.builtin.set_fact:
     _security_findings: "{{ _security_findings + [_self_provisioner_finding] }}"
   vars:

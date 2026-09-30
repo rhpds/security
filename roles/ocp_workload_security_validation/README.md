@@ -13,7 +13,7 @@ Checks:
 - Application `cluster-security-policy` is Healthy and Synced
 - AdminNetworkPolicy named by the Application matches those helm values
 - `image.config.openshift.io/cluster` `allowedRegistries` matches the Application, and `blockedRegistries` is empty
-- ClusterRoleBinding `self-provisioner` matches `selfProvisioner.enabled` from the Application
+- ClusterRoleBinding `self-provisioners` matches `selfProvisioner.enabled` from the Application
 
 ## Tenant mode
 
@@ -21,7 +21,7 @@ Runs all the cluster checks above, then adds:
 
 - `use_cluster_quota` is true, and ClusterResourceQuota `tenant-<user>` selects `openshift.io/requester` and matches the merged quota
 - LimitRange `tenant-limit-range` exists in each tenant namespace and matches the merged LimitRange
-- AdminNetworkPolicy `tenant-isolation-<uuid>` allows that tenant's own namespaces, denies other requester namespaces, and is checked before the cluster policy
+- AdminNetworkPolicy `tenant-isolation-<uuid>` allows that tenant's own namespaces, denies other tenant namespaces (by `demo.redhat.com/tenant-uuid` label), and is checked before the cluster policy
 - Each tenant namespace exists and is stamped with the requester and `demo.redhat.com/tenant-uuid`
 - The Showroom namespace exists when `ocp4_workload_showroom_namespace` is set
 - No other namespace is stamped for this tenant
