@@ -20,6 +20,7 @@
         _security_report_data
         | combine({
             _prefix ~ '_check':  item.check,
+            _prefix ~ '_status': (item.ok | bool) | ternary('PASS', 'FAIL'),
             _prefix ~ '_detail': item.detail
           })
       }}
