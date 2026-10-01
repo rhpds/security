@@ -1,27 +1,3 @@
-# Cluster AdminNetworkPolicy.
-# subjectLabel: the namespace label whose presence selects which namespaces
-# this ANP applies to. Must be a label, not an annotation.
-# An empty subject also selects openshift-*, which the product docs warn against.
-adminNetworkPolicy:
-  name: tenant-egress
-  priority: 50
-  subjectLabel: demo.redhat.com/tenant-uuid
-
-# CIDRs allowed out of user namespaces, inserted before the deny of 0.0.0.0/0 and ::/0.
-# Empty renders DNS, the API, then deny.
-# AdminNetworkPolicy takes CIDRs, not hostnames. A lab that must reach an
-# address outside the cluster, including an external registry, puts those
-# CIDRs here. This is cluster-wide. The per-tenant policy does not carry it.
-extraEgressCIDRs: []
-
-# Additional platform namespaces user workloads may open connections to.
-# Each entry generates an allow rule with no port restriction. The image
-# registry (port 5000) and kubernetes.default.svc (port 443) have their
-# own dedicated rules and do not need to be listed here.
-# Use this for namespaces a specific lab needs, such as openshift-logging
-# or a shared services namespace.
-allowNamespaces: []
-
 # OpenShift grants project creation via ClusterRoleBinding self-provisioners
 # (plural). false: empty the subjects and set autoupdate=false so the cluster
 # policy controller does not restore the groups. GitOps self-heal keeps it.
