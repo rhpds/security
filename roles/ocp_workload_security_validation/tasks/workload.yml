@@ -3,23 +3,28 @@
   when: ocp_workload_security_validation_mode == 'tenant'
   ansible.builtin.include_tasks: setup_tenant.yml
 
-- name: Load the desired cluster policy from the Application
-  ansible.builtin.include_tasks: load_desired.yml
-
-- name: Check the cluster against the Application
-  ansible.builtin.include_tasks: check_desired.yml
-
-- name: Check tenant quota and LimitRange
-  when: ocp_workload_security_validation_mode == 'tenant'
-  ansible.builtin.include_tasks: check_quota.yml
-
-- name: Check the per-tenant AdminNetworkPolicy
-  when: ocp_workload_security_validation_mode == 'tenant'
-  ansible.builtin.include_tasks: check_network.yml
-
-- name: Check access, Secrets, and namespaces
-  when: ocp_workload_security_validation_mode == 'tenant'
-  ansible.builtin.include_tasks: check_access.yml
+- name: Run security validation
+  rhpds.security.validate_tenant_security:
+    api_url: "{{ _security_api_url | default(sandbox_openshift_api_url) }}"
+    api_key: "{{ _security_api_key | default(cluster_admin_agnosticd_sa_token | trim) }}"
+    validate_certs: "{{ _security_validate_certs | default(false) }}"
+    mode: "{{ ocp_workload_security_validation_mode }}"
+    application_name: "{{ ocp_workload_cluster_security_policy_application_name }}"
+    application_namespace: "{{ ocp_workload_cluster_security_policy_namespace }}"
+    tenant_user: "{{ _tenant_security_user | default('') }}"
+    tenant_uuid: "{{ _tenant_security_uuid | default('') }}"
+    tenant_role: "{{ _tenant_security_role | default('admin') }}"
+    namespace_specs: "{{ _tenant_security_namespace_specs | default([]) }}"
+    expected_quota: "{{ _tenant_security_expected_quota | default({}) }}"
+    quota_is_complete: "{{ _tenant_security_quota_is_complete | default(false) }}"
+    use_cluster_quota: "{{ ocp4_workload_tenant_namespace_use_cluster_quota | default(true) }}"
+    egress_firewall: "{{ ocp4_workload_tenant_namespace_egress_firewall | default(false) }}"
+    expected_tenant_domains: "{{ ocp4_workload_tenant_namespace_egress_allow_domains | default([]) }}"
+    expected_tenant_cidrs: "{{ ocp4_workload_tenant_namespace_egress_allow_cidrs | default([]) }}"
+    expected_namespace_allows: "{{ ocp4_workload_tenant_namespace_egress_allow_namespaces | default([]) }}"
+    showroom_namespace: "{{ ocp4_workload_showroom_namespace | default('') }}"
+    admin_token: "{{ cluster_admin_agnosticd_sa_token | default('') | trim }}"
+  register: r_security_validation
 
 - name: Publish the security report
   ansible.builtin.include_tasks: finish.yml
