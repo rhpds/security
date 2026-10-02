@@ -15,90 +15,53 @@
         {{ _cluster_security_application_health | default('missing') }},
         {{ _cluster_security_application_sync | default('missing') }}
 
-- name: Read the cluster AdminNetworkPolicy named by the Application
+- name: Read the ValidatingAdmissionPolicy for ExternalName Services
   kubernetes.core.k8s_info:
     host: "{{ _security_api_url | default(omit) }}"
     api_key: "{{ _security_api_key | default(omit) }}"
     validate_certs: "{{ _security_validate_certs | default(omit) }}"
-    api_version: policy.networking.k8s.io/v1alpha1
-    kind: AdminNetworkPolicy
-    name: "{{ (_cluster_security_desired.adminNetworkPolicy | default({})).name | default('tenant-egress') }}"
-  register: _cluster_security_validation_anp
+    api_version: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    name: deny-externalname-services
+  register: _cluster_security_validation_vap
 
-- name: Record the cluster AdminNetworkPolicy result
+- name: Record the ValidatingAdmissionPolicy result
   ansible.builtin.set_fact:
-    _security_findings: "{{ _security_findings + [_anp_finding] }}"
-    _cluster_security_live_anp_priority: "{{ _anp_priority }}"
+    _security_findings: "{{ _security_findings + [_vap_finding] }}"
   vars:
-    _anp: "{{ _cluster_security_validation_anp.resources | default([], true) | first | default({}, true) }}"
-    _anp_missing: "{{ _anp | length == 0 }}"
-    _egress: "{{ _anp | json_query('spec.egress') | default([], true) }}"
-    _egress_names: "{{ _egress | map(attribute='name') | list }}"
-    _ingress_names: "{{ _anp | json_query('spec.ingress') | default([], true) | map(attribute='name') | list }}"
-    _deny_action: "{{ _egress | selectattr('name', 'equalto', 'deny-outside') | map(attribute='action') | list }}"
-    _want_allows: >-
-      {{
-        _cluster_security_desired.allowNamespaces | default([], true)
-        | map('regex_replace', '^', 'allow-to-')
-        | list
-      }}
-    _want_subject_label: >-
-      {{ (_cluster_security_desired.adminNetworkPolicy | default({})).subjectLabel
+    _vap_desired: "{{ (_cluster_security_desired.denyExternalNameServices | default({})).enabled | default(true) | bool }}"
+    _vap: "{{ _cluster_security_validation_vap.resources | default([], true) | first | default({}, true) }}"
+    _vap_exists: "{{ _vap | length > 0 }}"
+    _want_label: >-
+      {{ (_cluster_security_desired.denyExternalNameServices | default({})).subjectLabel
          | default('demo.redhat.com/tenant-uuid') }}
-    _requester: >-
+    _live_label: >-
       {{
-        _anp | json_query('spec.subject.namespaces.matchExpressions') | default([], true)
-        | selectattr('key', 'equalto', _want_subject_label)
-        | selectattr('operator', 'equalto', 'Exists')
-        | list
+        _vap | json_query('spec.matchConstraints.namespaceSelector.matchExpressions[0].key')
+        | default('', true)
       }}
-    _anp_priority: "{{ -1 if (_anp | json_query('spec.priority')) is none else (_anp | json_query('spec.priority')) }}"
-    _want_priority: "{{ (_cluster_security_desired.adminNetworkPolicy | default({})).priority | default(none) }}"
-    _anp_name: "{{ (_cluster_security_desired.adminNetworkPolicy | default({})).name | default('tenant-egress') }}"
-    _anp_ok: >-
+    _vap_ok: >-
       {{
-        not (_anp_missing | bool)
-        and (_want_priority is none or (_anp_priority | int) == (_want_priority | int))
-        and (_requester | length == 1)
-        and ('allow-from-ingress' in _ingress_names)
-        and ('allow-dns' in _egress_names)
-        and ('allow-api' in _egress_names)
-        and ('allow-ingress-routes' in _egress_names)
-        and ('allow-image-registry' in _egress_names)
-        and ('allow-kubernetes-api-svc' in _egress_names)
-        and (_want_allows | difference(_egress_names) | length == 0)
-        and (_deny_action == ['Deny'])
-        and (
-          (_cluster_security_desired.extraEgressCIDRs | default([], true) | length == 0)
-          or ('allow-extra-cidrs' in _egress_names)
+        (not (_vap_desired | bool))
+        or (
+          (_vap_exists | bool)
+          and (_live_label == _want_label)
         )
       }}
-    _anp_issues: >-
-      {{
-        []
-        + (['wrong priority ' ~ _anp_priority]
-           if (_want_priority is not none and (_anp_priority | int) != (_want_priority | int)) else [])
-        + (['subject label mismatch'] if (_requester | length != 1) else [])
-        + (['missing allow-dns'] if 'allow-dns' not in _egress_names else [])
-        + (['missing allow-api'] if 'allow-api' not in _egress_names else [])
-        + (['missing allow-ingress-routes'] if 'allow-ingress-routes' not in _egress_names else [])
-        + (['missing allow-image-registry'] if 'allow-image-registry' not in _egress_names else [])
-        + (['missing allow-kubernetes-api-svc'] if 'allow-kubernetes-api-svc' not in _egress_names else [])
-        + (['missing allow-extra-cidrs']
-           if (_cluster_security_desired.extraEgressCIDRs | default([], true) | length > 0
-               and 'allow-extra-cidrs' not in _egress_names) else [])
-        + (['deny-outside not Deny'] if (_deny_action != ['Deny']) else [])
-      }}
-    _anp_finding:
-      check: Cluster egress policy
-      ok: "{{ _anp_ok | bool }}"
+    _vap_finding:
+      check: ExternalName Service block (VAP)
+      ok: "{{ _vap_ok | bool }}"
       detail: >-
         {{
-          'missing — AdminNetworkPolicy ' ~ _anp_name ~ ' not found'
-          if (_anp_missing | bool)
+          'not required'
+          if not (_vap_desired | bool)
           else (
-            _anp_name ~ ', priority ' ~ _anp_priority
-            ~ ('' if (_anp_ok | bool) else ' — ' ~ (_anp_issues | join(', ')))
+            'missing'
+            if not (_vap_exists | bool)
+            else (
+              'deny-externalname-services, label ' ~ _live_label
+              ~ ('' if (_vap_ok | bool) else ' — expected ' ~ _want_label)
+            )
           )
         }}
 

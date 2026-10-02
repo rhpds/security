@@ -6,7 +6,7 @@
     validate_certs: "{{ _security_validate_certs | default(omit) }}"
     api_version: policy.networking.k8s.io/v1alpha1
     kind: AdminNetworkPolicy
-    name: "tenant-isolation-{{ _tenant_security_uuid | lower }}"
+    name: "tenant-{{ _tenant_security_uuid | lower }}"
   register: _tenant_security_anp
 
 - name: Record the per-tenant AdminNetworkPolicy result
@@ -17,6 +17,7 @@
     _anp_missing: "{{ _anp | length == 0 }}"
     _ingress_actions: "{{ _anp | json_query('spec.ingress') | default([], true) | items2dict(key_name='name', value_name='action') }}"
     _egress_actions: "{{ _anp | json_query('spec.egress') | default([], true) | items2dict(key_name='name', value_name='action') }}"
+    _egress_names: "{{ _anp | json_query('spec.egress') | default([], true) | map(attribute='name') | list }}"
     _subject_uuid: >-
       {{
         _anp | json_query('spec.subject.namespaces.matchLabels."demo.redhat.com/tenant-uuid"')
@@ -42,52 +43,159 @@
         _anp | json_query('spec.egress[?name==`deny-to-other-tenants`].to[].namespaces.matchExpressions[?key==`demo.redhat.com/tenant-uuid` && operator==`Exists`]')
         | default([], true)
       }}
-    _cluster_priority: >-
+    _want_ns_allows: >-
       {{
-        (
-          _cluster_security_live_anp_priority
-          if (_cluster_security_live_anp_priority | default(-1) | int) >= 0
-          else ((_cluster_security_desired.adminNetworkPolicy | default({})).priority | default(50))
-        ) | int
+        ocp4_workload_tenant_namespace_egress_allow_namespaces | default([], true)
+        | map('regex_replace', '^', 'allow-to-')
+        | list
       }}
-    _tenant_priority: "{{ -1 if (_anp | json_query('spec.priority')) is none else (_anp | json_query('spec.priority')) }}"
     _tenant_anp_ok: >-
       {{
         not (_anp_missing | bool)
-        and (_tenant_priority | int) < _cluster_priority
         and (_subject_uuid == _tenant_security_uuid)
         and (_ingress_actions['allow-from-own-namespaces'] | default('') == 'Allow')
+        and (_ingress_actions['allow-from-ingress'] | default('') == 'Allow')
         and (_ingress_actions['deny-from-other-tenants'] | default('') == 'Deny')
         and (_egress_actions['allow-to-own-namespaces'] | default('') == 'Allow')
         and (_egress_actions['deny-to-other-tenants'] | default('') == 'Deny')
+        and (_egress_actions['allow-dns'] | default('') == 'Allow')
+        and (_egress_actions['allow-api'] | default('') == 'Allow')
+        and (_egress_actions['allow-ingress-routes'] | default('') == 'Allow')
+        and (_egress_actions['allow-image-registry'] | default('') == 'Allow')
+        and (_egress_actions['allow-kubernetes-api-svc'] | default('') == 'Allow')
+        and (_want_ns_allows | difference(_egress_names) | length == 0)
         and (_tenant_security_uuid in _own_in)
         and (_tenant_security_uuid in _own_out)
         and (_deny_in | length > 0)
         and (_deny_out | length > 0)
-        and ('networks' not in (_anp.spec | default({}) | to_json))
       }}
     _tenant_anp_issues: >-
       {{
         []
-        + (['priority ' ~ _tenant_priority ~ ' not before cluster ' ~ _cluster_priority]
-           if ((_tenant_priority | int) >= (_cluster_priority | int)) else [])
         + (['subject uuid mismatch'] if (_subject_uuid != _tenant_security_uuid) else [])
         + (['missing allow-from-own-namespaces'] if (_ingress_actions['allow-from-own-namespaces'] | default('') != 'Allow') else [])
+        + (['missing allow-from-ingress'] if (_ingress_actions['allow-from-ingress'] | default('') != 'Allow') else [])
         + (['missing deny-from-other-tenants'] if (_ingress_actions['deny-from-other-tenants'] | default('') != 'Deny') else [])
         + (['missing allow-to-own-namespaces'] if (_egress_actions['allow-to-own-namespaces'] | default('') != 'Allow') else [])
         + (['missing deny-to-other-tenants'] if (_egress_actions['deny-to-other-tenants'] | default('') != 'Deny') else [])
-        + (['contains network CIDRs'] if ('networks' in (_anp.spec | default({}) | to_json)) else [])
+        + (['missing allow-dns'] if (_egress_actions['allow-dns'] | default('') != 'Allow') else [])
+        + (['missing allow-api'] if (_egress_actions['allow-api'] | default('') != 'Allow') else [])
+        + (['missing allow-ingress-routes'] if (_egress_actions['allow-ingress-routes'] | default('') != 'Allow') else [])
+        + (['missing allow-image-registry'] if (_egress_actions['allow-image-registry'] | default('') != 'Allow') else [])
+        + (['missing allow-kubernetes-api-svc'] if (_egress_actions['allow-kubernetes-api-svc'] | default('') != 'Allow') else [])
+        + (['missing namespace allows: ' ~ (_want_ns_allows | difference(_egress_names) | join(', '))]
+           if (_want_ns_allows | difference(_egress_names) | length > 0) else [])
       }}
     _tenant_anp_finding:
-      check: Tenant network isolation
+      check: Tenant network policy
       ok: "{{ _tenant_anp_ok | bool }}"
       detail: >-
         {{
-          'missing'
+          'missing — AdminNetworkPolicy tenant-' ~ (_tenant_security_uuid | lower) ~ ' not found'
           if (_anp_missing | bool)
           else (
-            'tenant-isolation-' ~ (_tenant_security_uuid | lower)
-            ~ ', priority ' ~ _tenant_priority ~ ' (before cluster at ' ~ _cluster_priority ~ ')'
+            'tenant-' ~ (_tenant_security_uuid | lower)
             ~ ('' if (_tenant_anp_ok | bool) else ' — ' ~ (_tenant_anp_issues | join(', ')))
           )
         }}
+
+- name: Find namespaces labeled for this tenant
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: v1
+    kind: Namespace
+    label_selectors:
+      - "demo.redhat.com/tenant-uuid={{ _tenant_security_uuid }}"
+  register: _tenant_security_labeled_namespaces
+  when: ocp4_workload_tenant_namespace_egress_firewall | default(false) | bool
+
+- name: Read the EgressFirewall in each labeled tenant namespace
+  kubernetes.core.k8s_info:
+    host: "{{ _security_api_url | default(omit) }}"
+    api_key: "{{ _security_api_key | default(omit) }}"
+    validate_certs: "{{ _security_validate_certs | default(omit) }}"
+    api_version: k8s.ovn.org/v1
+    kind: EgressFirewall
+    name: default
+    namespace: "{{ item.metadata.name }}"
+  register: _tenant_security_egressfirewalls
+  loop: "{{ _tenant_security_labeled_namespaces.resources | default([], true) }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: ocp4_workload_tenant_namespace_egress_firewall | default(false) | bool
+
+- name: Initialize EgressFirewall validation
+  ansible.builtin.set_fact:
+    _ef_namespace_issues: []
+  when: ocp4_workload_tenant_namespace_egress_firewall | default(false) | bool
+
+- name: Validate EgressFirewall content in each namespace
+  ansible.builtin.set_fact:
+    _ef_namespace_issues: "{{ _ef_namespace_issues + _ns_issues }}"
+  vars:
+    _ns_name: "{{ item.item.metadata.name }}"
+    _ef: "{{ item.resources | default([], true) | first | default({}, true) }}"
+    _ef_missing: "{{ _ef | length == 0 }}"
+    _rules: "{{ _ef | json_query('spec.egress') | default([], true) }}"
+    _allow_domains: >-
+      {{
+        _rules | selectattr('type', 'equalto', 'Allow')
+        | map(attribute='to') | selectattr('dnsName', 'defined')
+        | map(attribute='dnsName') | list
+      }}
+    _deny_cidrs: >-
+      {{
+        _rules | selectattr('type', 'equalto', 'Deny')
+        | map(attribute='to') | selectattr('cidrSelector', 'defined')
+        | map(attribute='cidrSelector') | list
+      }}
+    _want_domains: "{{ ocp4_workload_tenant_namespace_egress_allow_domains | default([], true) }}"
+    _want_cidrs: "{{ ocp4_workload_tenant_namespace_egress_allow_cidrs | default([], true) }}"
+    _allow_cidrs: >-
+      {{
+        _rules | selectattr('type', 'equalto', 'Allow')
+        | map(attribute='to') | selectattr('cidrSelector', 'defined')
+        | map(attribute='cidrSelector') | list
+      }}
+    _missing_domains: "{{ _want_domains | difference(_allow_domains) }}"
+    _missing_cidrs: "{{ _want_cidrs | difference(_allow_cidrs) }}"
+    _has_deny_all: "{{ '0.0.0.0/0' in _deny_cidrs and '::/0' in _deny_cidrs }}"
+    _ns_issues: >-
+      {{
+        [_ns_name ~ ': missing'] if (_ef_missing | bool) else (
+          []
+          + ([_ns_name ~ ': no deny-all'] if not (_has_deny_all | bool) else [])
+          + ([_ns_name ~ ': missing domains ' ~ (_missing_domains | join(', '))]
+             if (_missing_domains | length > 0) else [])
+          + ([_ns_name ~ ': missing CIDRs ' ~ (_missing_cidrs | join(', '))]
+             if (_missing_cidrs | length > 0) else [])
+        )
+      }}
+  loop: "{{ _tenant_security_egressfirewalls.results | default([], true) }}"
+  loop_control:
+    label: "{{ item.item.metadata.name }}"
+  when: ocp4_workload_tenant_namespace_egress_firewall | default(false) | bool
+
+- name: Record the EgressFirewall result
+  ansible.builtin.set_fact:
+    _security_findings: "{{ _security_findings + [_ef_finding] }}"
+  vars:
+    _ef_ns_count: "{{ _tenant_security_labeled_namespaces.resources | default([], true) | length }}"
+    _ef_issues: "{{ _ef_namespace_issues | default([]) }}"
+    _ef_ok: "{{ (_ef_ns_count | int) > 0 and (_ef_issues | length == 0) }}"
+    _ef_finding:
+      check: Tenant egress firewall
+      ok: "{{ _ef_ok | bool }}"
+      detail: >-
+        {{
+          'no namespaces with tenant label found'
+          if ((_ef_ns_count | int) == 0)
+          else (
+            (_ef_ns_count | string) ~ ' namespaces, deny-all + allowed domains verified'
+            if (_ef_ok | bool)
+            else (_ef_issues | join('; '))
+          )
+        }}
+  when: ocp4_workload_tenant_namespace_egress_firewall | default(false) | bool
