@@ -14,6 +14,17 @@ selfProvisioner:
 # An empty list does not render the object.
 # Applying this restarts CRI-O on the nodes. The Machine Config Operator
 # cordons each node while it does that.
+# Block ExternalName Services in tenant namespaces. Prevents tenants from
+# using the ingress router as a proxy to exfiltrate data to external servers.
+# A tenant could create an ExternalName Service + Route, then curl the Route
+# from inside the pod — traffic goes through the router (not subject to
+# EgressFirewall) to the external destination.
+# NOTE: manual Endpoints with external IPs are a secondary bypass vector
+# not yet covered by this policy.
+denyExternalNameServices:
+  enabled: true
+  subjectLabel: demo.redhat.com/tenant-uuid
+
 allowedRegistries:
   - quay.io
   - registry.redhat.io

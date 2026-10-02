@@ -1,0 +1,31 @@
+{{- if .Values.denyExternalNameServices.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: deny-externalname-services
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["services"]
+    namespaceSelector:
+      matchExpressions:
+        - key: {{ .Values.denyExternalNameServices.subjectLabel }}
+          operator: Exists
+  validations:
+    - expression: "object.spec.type != 'ExternalName'"
+      message: "ExternalName services are not allowed in tenant namespaces."
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: deny-externalname-services
+spec:
+  policyName: deny-externalname-services
+  validationActions:
+    - Deny
+{{- end }}
