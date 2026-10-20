@@ -18,12 +18,25 @@ In cluster mode they are resolved from the first name that is set:
 
 | Setting | Resolution order |
 | --- | --- |
-| `ocp_workload_security_validation_api_url` | `sandbox_openshift_api_url`, then `openshift_api_url` |
-| `ocp_workload_security_validation_api_key` | `cluster_admin_agnosticd_sa_token`, then `openshift_cluster_admin_token`, then `openshift_api_key` |
+| `ocp_workload_security_validation_api_url` | `openshift_api_url`, then `sandbox_openshift_api_url` |
+| `ocp_workload_security_validation_api_key` | `cluster_admin_agnosticd_sa_token`, then `openshift_cluster_admin_token`, then `openshift_api_key`, then `sandbox_openshift_api_key` |
 
 Set either variable directly to override the search. If nothing resolves, the
 role fails before calling the module rather than raising an undefined-variable
 error.
+
+The URL and the token have to belong to the same cluster, which is why
+`openshift_api_url` comes first. In a nested-cluster config (`openshift_cnv`
+with the assisted installer) `sandbox_openshift_api_url` is the **CNV host
+cluster** the guest cluster's VMs run on, not the cluster being validated:
+`host_ocp4_assisted_installer` and `host_ocp4_assisted_scale` use it as the
+`host:` for `kubevirt.core.kubevirt_vm`, paired with
+`sandbox_openshift_api_key`. Pointing validation there with a guest
+cluster-admin token returns `401 Unauthorized`.
+
+In tenant mode the same variable means something different - the sandbox is a
+namespace on the target cluster - which is why `setup_tenant.yml` sets
+`_security_api_url` from it explicitly and bypasses this search entirely.
 
 ## Cluster mode (default)
 
