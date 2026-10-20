@@ -16,11 +16,21 @@ ocp_workload_cluster_security_policy_namespace: openshift-gitops
 # when they are missing. Cluster mode resolves them here, from whichever of the
 # usual AgnosticD names the catalog item happens to provide. Set either
 # variable directly to override the search.
+#
+# openshift_api_url is first on purpose. In a nested-cluster config
+# (openshift_cnv / assisted installer) sandbox_openshift_api_url is the CNV
+# HOST cluster that the guest cluster's VMs run on - host_ocp4_assisted_installer
+# and host_ocp4_assisted_scale use it with sandbox_openshift_api_key. Sending a
+# guest cluster-admin token there returns 401. It stays last as a fallback for
+# configs where the sandbox really is the target cluster.
 ocp_workload_security_validation_api_url: >-
-  {{ sandbox_openshift_api_url
-     | default(openshift_api_url | default(''), true) }}
+  {{ openshift_api_url
+     | default(sandbox_openshift_api_url | default(''), true) }}
 
 ocp_workload_security_validation_api_key: >-
   {{ cluster_admin_agnosticd_sa_token
      | default(openshift_cluster_admin_token
-               | default(openshift_api_key | default(''), true), true) }}
+               | default(openshift_api_key
+                         | default(sandbox_openshift_api_key | default(''), true),
+                         true),
+               true) }}
