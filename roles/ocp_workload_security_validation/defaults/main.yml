@@ -9,3 +9,18 @@ ocp_workload_security_validation_mode: cluster
 # which ocp_workload_cluster_security_policy renders from the catalog.
 ocp_workload_cluster_security_policy_application_name: cluster-security-policy
 ocp_workload_cluster_security_policy_namespace: openshift-gitops
+
+# Cluster API used for the validation calls.
+#
+# Tenant mode overrides both of these from setup_tenant.yml, which fails fast
+# when they are missing. Cluster mode resolves them here, from whichever of the
+# usual AgnosticD names the catalog item happens to provide. Set either
+# variable directly to override the search.
+ocp_workload_security_validation_api_url: >-
+  {{ sandbox_openshift_api_url
+     | default(openshift_api_url | default(''), true) }}
+
+ocp_workload_security_validation_api_key: >-
+  {{ cluster_admin_agnosticd_sa_token
+     | default(openshift_cluster_admin_token
+               | default(openshift_api_key | default(''), true), true) }}

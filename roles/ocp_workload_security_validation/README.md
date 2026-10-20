@@ -6,6 +6,25 @@ Last workload on a cluster or tenant catalog item. It does not install anything 
 
 `ocp_workload_cluster_security_policy` writes the desired policy into Application `cluster-security-policy` and trusts Argo CD once that Application is Healthy and Synced. This role runs after the other workloads, reads the Application helm values, and compares the live objects to those values. The helm values are the source of truth. This role does not keep its own copy of the registry list, the namespace allows, or the priorities.
 
+## Cluster API credentials
+
+The role needs an API URL and a cluster-admin token to read the live objects.
+
+In tenant mode these come from `sandbox_openshift_api_url` and
+`cluster_admin_agnosticd_sa_token`, and the role fails with a clear message if
+either is missing.
+
+In cluster mode they are resolved from the first name that is set:
+
+| Setting | Resolution order |
+| --- | --- |
+| `ocp_workload_security_validation_api_url` | `sandbox_openshift_api_url`, then `openshift_api_url` |
+| `ocp_workload_security_validation_api_key` | `cluster_admin_agnosticd_sa_token`, then `openshift_cluster_admin_token`, then `openshift_api_key` |
+
+Set either variable directly to override the search. If nothing resolves, the
+role fails before calling the module rather than raising an undefined-variable
+error.
+
 ## Cluster mode (default)
 
 Checks:
