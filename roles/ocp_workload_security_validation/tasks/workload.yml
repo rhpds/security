@@ -3,10 +3,25 @@
   when: ocp_workload_security_validation_mode == 'tenant'
   ansible.builtin.include_tasks: setup_tenant.yml
 
+- name: Require the cluster API
+  when:
+  - ocp_workload_security_validation_mode != 'tenant'
+  - ocp_workload_security_validation_api_url | length == 0
+    or ocp_workload_security_validation_api_key | length == 0
+  ansible.builtin.fail:
+    msg: >-
+      Cluster security validation needs an API URL and a cluster-admin token.
+      None of sandbox_openshift_api_url / openshift_api_url resolved for the
+      URL, or none of cluster_admin_agnosticd_sa_token /
+      openshift_cluster_admin_token / openshift_api_key resolved for the token.
+      Set ocp_workload_security_validation_api_url and
+      ocp_workload_security_validation_api_key, or define one of those names in
+      the catalog item.
+
 - name: Run security validation
   rhpds.security.validate_tenant_security:
-    api_url: "{{ _security_api_url | default(sandbox_openshift_api_url) }}"
-    api_key: "{{ _security_api_key | default(cluster_admin_agnosticd_sa_token | trim) }}"
+    api_url: "{{ _security_api_url | default(ocp_workload_security_validation_api_url) }}"
+    api_key: "{{ _security_api_key | default(ocp_workload_security_validation_api_key | trim) }}"
     validate_certs: "{{ _security_validate_certs | default(false) }}"
     mode: "{{ ocp_workload_security_validation_mode }}"
     application_name: "{{ ocp_workload_cluster_security_policy_application_name }}"
